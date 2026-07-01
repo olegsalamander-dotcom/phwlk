@@ -28,11 +28,9 @@
 <body>
 
 <div class="app">
-    <h1>Фотопрогулка 1.0</h1>
+    <h1>Фотопрогулка</h1>
     <div class="instruction">
-        Надевай наушники, включай музыку и иди гулять. В случайное время ты получишь сигнал и у тебя будет ровно одна минута, чтобы сделать кадр. Делай красивый кадр в том месте, где находишься. Когда фото будет готово нажми "кадр сделан" или просто продолжай прогулку когда таймер истечёт.
-        <br><br>
-        Удерживай кнопку «Стоп» для выхода.
+        Надевай наушники, включай музыку и иди гулять. Удерживай кнопку «Стоп» (долгое нажатие) для выхода.
     </div>
     
     <div class="status" id="status">По готовности нажми СТАРТ</div>
@@ -58,14 +56,14 @@
 </div>
 
 <script>
-    const phrasesStart = ["Прогулка началась. Вдохновляйся моментом.", "Фотоохота включена.", "Начинаем снимать."];
-    const phrasesShot = ["Внимание, снимай! У тебя минута.", "Лови момент!"];
-    const phrasesWalk = ["Время вышло. Идем дальше.", "Продолжаем прогулку."];
+    const phrasesStart = ["Прогулка началась. Вдохновляйся моментом.", "Фотоохота включена. Наблюдай за городом.", "Начинаем снимать."];
+    const phrasesShot = ["Внимание, снимай! У тебя минута.", "Лови момент! Время для кадра."];
+    const phrasesWalk = ["Время вышло. Идем дальше.", "Снимок сделан? Продолжаем прогулку."];
 
     let audioCtx = null, backgroundNode = null, dummyAudio = null; 
     let state = 'idle', running = false, isMinutes = false; 
+    let holdTimer;
 
-    // Фоновый воркер для таймера
     const workerCode = `
         let timer = null;
         self.onmessage = function(e) {
@@ -81,16 +79,26 @@
     `;
     const worker = new Worker(URL.createObjectURL(new Blob([workerCode], { type: 'application/javascript' })));
 
-    // Ключевая функция: Остановка аудио с явным сигналом системе
+    function playSignal() {
+        if (!audioCtx) return;
+        for (let i = 0; i < 3; i++) {
+            setTimeout(() => {
+                let osc = audioCtx.createOscillator();
+                let gain = audioCtx.createGain();
+                osc.type = 'sine'; osc.frequency.value = 950;
+                gain.gain.setValueAtTime(0.8, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.4);
+            }, i * 400);
+        }
+    }
+
     function stopBackgroundAudio() {
         if (backgroundNode) { try { backgroundNode.stop(); } catch(e){} backgroundNode = null; }
         if (dummyAudio) { dummyAudio.pause(); dummyAudio.src = ""; dummyAudio = null; }
         if (audioCtx) { try { audioCtx.close(); audioCtx = null; } catch(e){} }
-        
-        // ГЛАВНОЕ: Сообщаем Android, что мы больше не "играем" музыку
-        if ('mediaSession' in navigator) {
-            navigator.mediaSession.playbackState = "none";
-        }
+        if ('mediaSession' in navigator) navigator.mediaSession.playbackState = "none";
     }
 
     function startBackgroundAudio() {
@@ -108,7 +116,6 @@
             }
             dummyAudio.play().catch(() => {});
             
-            // Сообщаем системе, что мы начали аудио-сессию
             if ('mediaSession' in navigator) {
                 navigator.mediaSession.playbackState = "playing";
                 navigator.mediaSession.metadata = new MediaMetadata({ title: 'Фотопрогулка', artist: 'Олег Романов' });
@@ -118,31 +125,49 @@
 
     function speak(text) {
         startBackgroundAudio();
+        playSignal(); // Возвращаем звуковой сигнал
         speechSynthesis.cancel();
         let u = new SpeechSynthesisUtterance(text);
         u.lang = 'ru-RU';
-        // Когда речь закончена - немедленно вызываем остановку
         u.onend = u.onerror = () => stopBackgroundAudio(); 
         speechSynthesis.speak(u);
     }
 
-    // Инициализация UI
     const btn = document.getElementById('btn');
-    document.getElementById('minR').oninput = document.getElementById('maxR').oninput = () => {
-        let min = document.getElementById('minR'), max = document.getElementById('maxR');
-        if (+min.value > +max.value) min.value = max.value;
-        document.getElementById('val').textContent = `${min.value} - ${max.value}`;
+    const prog = document.getElementById('progress');
+
+    // Логика долгого нажатия
+    btn.onpointerdown = () => {
+        if (state === 'idle') return;
+        let start = Date.now();
+        holdTimer = setInterval(() => {
+            let elapsed = Date.now() - start;
+            prog.style.width = Math.min(100, elapsed / 10) + "%";
+            if (elapsed > 1000) { 
+                clearInterval(holdTimer);
+                worker.postMessage({ action: 'stop' });
+                stopBackgroundAudio();
+                location.reload(); 
+            }
+        }, 30);
     };
+    btn.onpointerup = btn.onpointerleave = () => { clearInterval(holdTimer); prog.style.width = "0%"; };
 
     btn.onclick = () => {
         if (state === 'idle') {
             state = 'walk'; running = true; btn.style.background = "#2e7d32"; 
-            document.getElementById('btnText').textContent = "СТОП";
+            document.getElementById('btnText').textContent = "СТОП (держ)";
             speak(phrasesStart[Math.floor(Math.random() * phrasesStart.length)]);
             cycle();
         } else if (state === 'shot') {
             nextPhase();
         }
+    };
+
+    document.getElementById('minR').oninput = document.getElementById('maxR').oninput = () => {
+        let min = document.getElementById('minR'), max = document.getElementById('maxR');
+        if (+min.value > +max.value) min.value = max.value;
+        document.getElementById('val').textContent = `${min.value} - ${max.value}`;
     };
 
     function cycle() {
@@ -168,7 +193,7 @@
 
     function nextPhase() {
         state = 'walk'; speak(phrasesWalk[Math.floor(Math.random() * phrasesWalk.length)]);
-        btn.style.background = "#2e7d32"; document.getElementById('btnText').textContent = "СТОП";
+        btn.style.background = "#2e7d32"; document.getElementById('btnText').textContent = "СТОП (держ)";
         cycle();
     }
 </script>
