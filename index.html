@@ -41,7 +41,7 @@
 <body>
 
 <div class="app">
-    <h1>Фотопрогулка</h1>
+    <h1>Фотопрогулка 1.9</h1>
     <div class="instruction">
         Надевай наушники, включай музыку и иди гулять. В случайное время ты получишь сигнал и у тебя будет ровно одна минута, чтобы сделать кадр. Делай красивый кадр в том месте, где находишься. Когда фото будет готово нажми "кадр сделан" или просто продолжай прогулку когда таймер истечёт.
         <br><br>
@@ -79,49 +79,24 @@
 </div>
 
 <script>
-    // Пулы фраз для рандомизации озвучки
-    const phrasesStart = [
-        "Прогулка началась. Вдохновляйся моментом.",
-        "Режим фотоохоты включен. Наблюдай за городом.",
-        "Фотопрогулка активирована. Начинаем снимать.",
-        "Город ждет твой лучший кадр. Погнали."
-    ];
+    const phrasesStart = ["Прогулка началась. Вдохновляйся моментом.", "Режим фотоохоты включен. Наблюдай за городом.", "Фотопрогулка активирована. Начинаем снимать.", "Город ждет твой лучший кадр. Погнали."];
+    const phrasesShot = ["Внимание, снимай! У тебя минута.", "Лови момент! Время для кадра.", "Сделай этот кадр особенным. Пошел отсчет.", "Твой шанс! Делай максимально красивый снимок.", "Время пришло. В объективе — жизнь."];
+    const phrasesWalk = ["Время вышло. Идем дальше.", "Кадр готов. Продолжаем прогулку.", "Снимок сделан? Отлично, ищем новый сюжет.", "Минута позади. Двигаемся к следующей точке.", "Заметь детали, которых никто не видит. Продолжаем прогулку.", "Меняй ракурс, ищи свет. Идем дальше.", "Не спеши, доверься интуиции. Продолжаем путь.", "Город — это твой холст. Идем дальше."];
 
-    const phrasesShot = [
-        "Внимание, снимай! У тебя минута.",
-        "Лови момент! Время для кадра.",
-        "Сделай этот кадр особенным. Пошел отсчет.",
-        "Твой шанс! Делай максимально красивый снимок.",
-        "Время пришло. В объективе — жизнь."
-    ];
-
-    const phrasesWalk = [
-        "Время вышло. Идем дальше.",
-        "Кадр готов. Продолжаем прогулку.",
-        "Снимок сделан? Отлично, ищем новый сюжет.",
-        "Минута позади. Двигаемся к следующей точке.",
-        "Заметь детали, которых никто не видит. Продолжаем прогулку.",
-        "Меняй ракурс, ищи свет. Идем дальше.",
-        "Не спеши, доверься интуиции. Продолжаем путь.",
-        "Город — это твой холст. Идем дальше."
-    ];
-
-    // Основная логика работы
-    let audioCtx = null;
-    let backgroundNode = null;
-    let dummyAudio = null; 
-    let state = 'idle', running = false, count = 0;
-    let isMinutes = false; 
-    let currentUtterance = null; 
-    
-    // Глобальный массив-якорь для защиты речевых потоков от сборщика мусора Android
+    let audioCtx = null, backgroundNode = null, dummyAudio = null, state = 'idle', running = false, currentUtterance = null;
+    let isMinutes = false, wakeLock = null;
     window.activeUtterances = [];
     
-    const btn = document.getElementById('btn');
-    const prog = document.getElementById('progress');
-    const unitToggle = document.getElementById('unitToggle');
+    const btn = document.getElementById('btn'), prog = document.getElementById('progress'), unitToggle = document.getElementById('unitToggle');
 
-    // Инициализация Web Worker для фонового точного счета времени без засыпания вкладки
+    // Функция запроса Wake Lock
+    async function requestWakeLock() {
+        try {
+            wakeLock = await navigator.wakeLock.request('screen');
+            wakeLock.addEventListener('release', () => console.log('Wake Lock освобожден'));
+        } catch (err) { console.error(`${err.name}, ${err.message}`); }
+    }
+
     const workerCode = `
         let timer = null;
         self.onmessage = function(e) {
@@ -131,105 +106,45 @@
                 timer = setInterval(() => {
                     let timeLeft = Math.max(0, Math.round((endTime - Date.now()) / 1000));
                     self.postMessage({ action: 'tick', timeLeft: timeLeft, phase: e.data.phase });
-                    if (timeLeft <= 0) {
-                        clearInterval(timer);
-                    }
+                    if (timeLeft <= 0) clearInterval(timer);
                 }, 250);
-            } else if (e.data.action === 'stop') {
-                clearInterval(timer);
-            }
+            } else if (e.data.action === 'stop') clearInterval(timer);
         };
     `;
-    const blob = new Blob([workerCode], { type: 'application/javascript' });
-    const worker = new Worker(URL.createObjectURL(blob));
+    const worker = new Worker(URL.createObjectURL(new Blob([workerCode], { type: 'application/javascript' })));
 
-    // Обработка тиков времени из фонового воркера
     worker.onmessage = function(e) {
         if (!running) return;
-        let timeLeft = e.data.timeLeft;
-        let phase = e.data.phase;
-        
+        let timeLeft = e.data.timeLeft, phase = e.data.phase;
         if (phase === 'walk') {
-            let displayTime = isMinutes && timeLeft >= 60 
-                ? `${Math.floor(timeLeft / 60)}м ${timeLeft % 60}с` 
-                : `${timeLeft}с`;
-                
+            let displayTime = isMinutes && timeLeft >= 60 ? `${Math.floor(timeLeft / 60)}м ${timeLeft % 60}с` : `${timeLeft}с`;
             document.getElementById('timerDisplay').textContent = `До сигнала: ${displayTime}`;
-            
-            if (timeLeft <= 0) {
-                worker.postMessage({ action: 'stop' });
-                triggerShot();
-            }
+            if (timeLeft <= 0) { worker.postMessage({ action: 'stop' }); triggerShot(); }
         } else if (phase === 'shot') {
             document.getElementById('btnText').textContent = `КАДР СДЕЛАН (${timeLeft})`;
-            
-            if (timeLeft <= 0) {
-                worker.postMessage({ action: 'stop' });
-                nextPhase();
-            }
+            if (timeLeft <= 0) { worker.postMessage({ action: 'stop' }); nextPhase(); }
         }
     };
 
-    // Фоноудерживающий движок
     function startBackgroundAudio() {
-        if (!audioCtx) {
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        }
-        if (audioCtx.state === 'suspended') {
-            audioCtx.resume();
-        }
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
         if (!backgroundNode) {
-            // Генерируем постоянный микро-сигнал 20Гц, заставляющий систему держать вкладку активной
             let osc = audioCtx.createOscillator();
             let gain = audioCtx.createGain();
-            osc.frequency.value = 20;
-            gain.gain.value = 0.002;
-            osc.connect(gain);
-            gain.connect(audioCtx.destination);
-            osc.start();
-            backgroundNode = osc;
-
-            // Дублирующий пустой аудиопоток для стабильности на мобильных устройствах
-            if (!dummyAudio) {
-                dummyAudio = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAAAD');
-                dummyAudio.loop = true;
-            }
+            osc.frequency.value = 20; gain.gain.value = 0.002;
+            osc.connect(gain); gain.connect(audioCtx.destination); osc.start(); backgroundNode = osc;
+            if (!dummyAudio) { dummyAudio = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAAAD'); dummyAudio.loop = true; }
             dummyAudio.play().catch(() => {});
-
-            if ('mediaSession' in navigator) {
-                navigator.mediaSession.metadata = new MediaMetadata({
-                    title: 'Фотопрогулка',
-                    artist: 'Олег Романов'
-                });
-            }
         }
     }
 
-    // Полная остановка и уничтожение аудиосистемы для освобождения микшера Android
     function stopBackgroundAudio() {
-        if (backgroundNode) {
-            try { backgroundNode.stop(); } catch(e){}
-            backgroundNode = null;
-        }
-        if (dummyAudio) {
-            try {
-                dummyAudio.pause();
-                dummyAudio.src = "";
-                dummyAudio = null;
-            } catch(e){}
-        }
-        if (audioCtx) {
-            try {
-                audioCtx.close();
-                audioCtx = null;
-            } catch(e){}
-        }
-        if ('mediaSession' in navigator) {
-            navigator.mediaSession.playbackState = "none";
-        }
+        if (backgroundNode) { try { backgroundNode.stop(); } catch(e){} backgroundNode = null; }
+        if (dummyAudio) { try { dummyAudio.pause(); dummyAudio.src = ""; dummyAudio = null; } catch(e){} }
+        if (audioCtx) { try { audioCtx.close(); audioCtx = null; } catch(e){} }
     }
 
-    // Тройной звуковой сигнал для гарантированного пробития фона и приглушения музыки
     function playSignal() {
         if (!audioCtx) return;
         for (let i = 0; i < 3; i++) {
@@ -237,63 +152,35 @@
                 if (!audioCtx) return;
                 let osc = audioCtx.createOscillator();
                 let gain = audioCtx.createGain();
-                osc.type = 'sine';
-                osc.frequency.value = 950;
+                osc.type = 'sine'; osc.frequency.value = 950;
                 gain.gain.setValueAtTime(0.8, audioCtx.currentTime);
                 gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
-                osc.connect(gain);
-                gain.connect(audioCtx.destination);
-                osc.start();
-                osc.stop(audioCtx.currentTime + 0.4);
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.4);
             }, i * 400);
         }
     }
 
     function speak(text) {
         startBackgroundAudio();
-        playSignal(); // Подаем железный звуковой сигнал через AudioContext
-
-        // Голосовое сопровождение
+        playSignal();
         speechSynthesis.cancel();
-        
         currentUtterance = new SpeechSynthesisUtterance(text);
         currentUtterance.lang = 'ru-RU';
-        window.activeUtterances.push(currentUtterance); // Защита от сборщика мусора
-        
-        if ('mediaSession' in navigator) {
-            navigator.mediaSession.playbackState = "playing";
-        }
-
+        window.activeUtterances.push(currentUtterance);
         let cleaned = false;
         const restoreVolume = () => {
             if (cleaned) return;
             cleaned = true;
             clearTimeout(safetyTimeout);
-
             speechSynthesis.cancel();
             window.activeUtterances = window.activeUtterances.filter(u => u !== currentUtterance);
-
-            // КОРЕНЬ РЕШЕНИЯ ДЛЯ АНДРОИД: Полностью ликвидируем все аудио-потоки вкладки.
-            // Когда ОС видит завершение TTS и пустой звуковой стек вкладки — музыка восстанавливается на 100%.
             stopBackgroundAudio();
-
-            // ТАЙМАУТ ПОВТОРНОГО ВКЛЮЧЕНИЯ ШУМА УДАЛЕН. 
-            // Теперь музыка во время ходьбы будет играть идеально и громко.
-
             currentUtterance = null;
         };
-
-        // Подписываемся на стандартные триггеры окончания речи
         currentUtterance.onend = currentUtterance.onerror = restoreVolume;
-
-        // ЖЕЛЕЗНЫЙ ПРЕДОХРАНИТЕЛЬ: Расчет времени (~150мс на символ + 3 секунды безусловного запаса)
-        const estimatedTime = (text.length * 150) + 3000;
-        const safetyTimeout = setTimeout(restoreVolume, estimatedTime);
-
-        // Микро-пауза перед стартом для корректного разделения аудио-сессий в Android Chrome
-        setTimeout(() => {
-            speechSynthesis.speak(currentUtterance);
-        }, 50);
+        const safetyTimeout = setTimeout(restoreVolume, (text.length * 150) + 3000);
+        setTimeout(() => { speechSynthesis.speak(currentUtterance); }, 50);
     }
 
     function updateUI() {
@@ -301,29 +188,18 @@
         if (+min.value > +max.value) min.value = max.value;
         document.getElementById('val').textContent = `${min.value} - ${max.value}`;
     }
-    document.getElementById('minR').oninput = updateUI;
-    document.getElementById('maxR').oninput = updateUI;
-
-    // Логика работы переключателя режимов (сек/мин)
-    unitToggle.onclick = () => {
-        isMinutes = !isMinutes;
-        unitToggle.textContent = isMinutes ? "Интервал (мин)" : "Интервал (сек)";
-        updateUI();
-    };
+    document.getElementById('minR').oninput = document.getElementById('maxR').oninput = updateUI;
+    unitToggle.onclick = () => { isMinutes = !isMinutes; unitToggle.textContent = isMinutes ? "Интервал (мин)" : "Интервал (сек)"; updateUI(); };
 
     btn.onclick = () => {
         if (state === 'idle') {
             state = 'walk'; running = true;
             btn.style.background = "#2e7d32";
             document.getElementById('btnText').textContent = "СТОП";
-            
-            const randomPhrase = phrasesStart[Math.floor(Math.random() * phrasesStart.length)];
-            speak(randomPhrase);
-            
+            requestWakeLock(); // Включаем запрет засыпания
+            speak(phrasesStart[Math.floor(Math.random() * phrasesStart.length)]);
             cycle();
-        } else if (state === 'shot') {
-            nextPhase();
-        }
+        } else if (state === 'shot') { nextPhase(); }
     };
 
     let holdTimer;
@@ -334,66 +210,43 @@
             let elapsed = Date.now() - start;
             prog.style.width = Math.min(100, elapsed / 10) + "%";
             if (elapsed > 1000) {
-                worker.postMessage({ action: 'stop' });
-                stopBackgroundAudio();
-                location.reload();
+                if (wakeLock) wakeLock.release(); // Освобождаем Wake Lock
+                worker.postMessage({ action: 'stop' }); stopBackgroundAudio(); location.reload();
             }
         }, 30);
     };
-    btn.onpointerup = btn.onpointerleave = () => {
-        clearInterval(holdTimer);
-        prog.style.width = "0%";
-    };
+    btn.onpointerup = btn.onpointerleave = () => { clearInterval(holdTimer); prog.style.width = "0%"; };
 
     function cycle() {
         if (!running) return;
-        let minVal = +document.getElementById('minR').value;
-        let maxVal = +document.getElementById('maxR').value;
+        let minVal = +document.getElementById('minR').value, maxVal = +document.getElementById('maxR').value;
         let randomUnits = Math.floor(Math.random() * (maxVal - minVal + 1) + minVal);
-        
-        let totalSeconds = randomUnits * (isMinutes ? 60 : 1);
+        let endTime = Date.now() + randomUnits * (isMinutes ? 60 : 1) * 1000;
         document.getElementById('status').textContent = "Идёт прогулка";
-        
-        let endTime = Date.now() + totalSeconds * 1000;
-        
-        // Запуск точного фонового отсчета времени через Web Worker
         worker.postMessage({ action: 'start', endTime: endTime, phase: 'walk' });
     }
 
     function triggerShot() {
         state = 'shot';
-        
-        const randomPhrase = phrasesShot[Math.floor(Math.random() * phrasesShot.length)];
-        speak(randomPhrase);
-        
+        speak(phrasesShot[Math.floor(Math.random() * phrasesShot.length)]);
         document.getElementById('status').textContent = "ДЕЛАЙ КАДР!";
-        btn.style.background = "#fbc02d";
-        btn.style.color = "#000";
-        
-        let endTime = Date.now() + 60 * 1000;
-        // Передаем минутный отсчет воркеру
-        worker.postMessage({ action: 'start', endTime: endTime, phase: 'shot' });
+        btn.style.background = "#fbc02d"; btn.style.color = "#000";
+        worker.postMessage({ action: 'start', endTime: Date.now() + 60000, phase: 'shot' });
     }
 
     function nextPhase() {
         state = 'walk';
-        
-        const randomPhrase = phrasesWalk[Math.floor(Math.random() * phrasesWalk.length)];
-        speak(randomPhrase);
-        
-        btn.style.background = "#2e7d32";
-        btn.style.color = "#fff";
+        speak(phrasesWalk[Math.floor(Math.random() * phrasesWalk.length)]);
+        btn.style.background = "#2e7d32"; btn.style.color = "#fff";
         document.getElementById('btnText').textContent = "СТОП";
         cycle();
     }
-    // Регистрация Service Worker
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js')
-            .then(reg => console.log('ServiceWorker зарегистрирован', reg))
-            .catch(err => console.log('Ошибка регистрации ServiceWorker', err));
-    });
-}
+
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW error', err));
+        });
+    }
 </script>
 </body>
 </html>
