@@ -112,7 +112,11 @@
         speechSynthesis.cancel();
         let u = new SpeechSynthesisUtterance(text);
         u.lang = 'ru-RU';
-        u.onend = () => { if(callback) callback(); };
+        u.onend = () => { 
+            // Принудительно возвращаем фокус
+            if (audioCtx) audioCtx.resume();
+            if(callback) callback(); 
+        };
         speechSynthesis.speak(u);
     }
 
