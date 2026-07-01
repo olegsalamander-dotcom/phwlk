@@ -22,13 +22,16 @@
         .instruction { font-size: 13px; color: var(--text-dim); text-align: center; margin-bottom: 30px; line-height: 1.6; }
         .status { padding: 16px; border: 1px solid var(--border); border-radius: 12px; text-align: center; margin-bottom: 20px; font-size: 14px; font-weight: 500; }
         
+        /* Кнопка */
         button { width: 100%; padding: 18px; border: none; border-radius: 12px; font-weight: 600; font-size: 15px; cursor: pointer; position: relative; overflow: hidden; background: var(--accent); color: white; transition: opacity 0.2s; }
         button:active { opacity: 0.8; }
         .hold-progress { position: absolute; left: 0; top: 0; height: 100%; background: rgba(0,0,0,0.2); width: 0%; pointer-events: none; }
         
+        /* Панель настроек */
         .panel { padding: 20px; border-radius: 16px; background: var(--panel); border: 1px solid var(--border); margin-top: 20px; }
         .slider-wrap { position: relative; height: 40px; margin-top: 10px; }
         .track { position: absolute; top: 18px; width: 100%; height: 2px; background: var(--border); }
+        /* Закраска диапазона */
         .track-fill { position: absolute; top: 18px; height: 2px; background: var(--accent); pointer-events: none; }
         .ticks { display: flex; justify-content: space-between; font-size: 9px; color: var(--text-dim); padding: 0 4px; }
         input[type=range] { position: absolute; width: 100%; pointer-events: none; -webkit-appearance: none; background: none; }
@@ -41,9 +44,9 @@
 <body>
 
 <div class="app">
-    <h1>Фотопрогулка 1.3</h1>
+    <h1>Фотопрогулка 1.4</h1>
     <div class="instruction">
-        Режим блокировки активирован. Приложение работает непрерывно.
+        Ходи по городу и делай фото. В случайный момент тебе поступит сигнал. У тебя будет ровно 1 минута, чтобы сделать кадр.
         <br><br>
         Удерживай кнопку «Стоп» для выхода.
     </div>
@@ -62,33 +65,35 @@
         </div>
         <div class="slider-wrap">
             <div class="track"></div>
-            <div class="track-fill" id="trackFill"></div>
-            <div class="ticks"><span>1</span><span>5</span><span>10</span><span>15</span></div>
+            <div class="track-fill" id="trackFill"></div> <div class="ticks"><span>1</span><span>5</span><span>10</span><span>15</span></div>
             <input id="minR" type="range" min="1" max="15" value="3">
             <input id="maxR" type="range" min="1" max="15" value="10">
         </div>
         
-        <div id="timerDisplay" style="text-align:center; margin-top:25px; color: var(--text-dim); font-size: 11px;">До сигнала: —</div>
+        <div id="timerDisplay" style="text-align:center; margin-top:15px; color: var(--text-dim); font-size: 11px;">До сигнала: —</div>
     </div>
 
     <div class="footer">
         <div>Автор: Олег Романов</div>
         <div style="margin-top: 8px;">
-            <a href="https://t.me/olegolezhek/">Телеграм канал</a>
+            <a href="https://t.me/olegolezhek/">Телеграм канал</a> | 
+            <a href="https://t.me/olegolezhek?direct">Сообщения</a>
         </div>
     </div>
 </div>
 
 <script>
+    /* Данные фраз */
     const phrasesStart = ["Прогулка началась. Вдохновляйся моментом.", "Режим фотоохоты включен. Наблюдай за городом.", "Фотопрогулка активирована. Начинаем снимать.", "Город ждет твой лучший кадр. Погнали."];
     const phrasesShot = ["Внимание, снимай! У тебя минута.", "Лови момент! Время для кадра.", "Сделай этот кадр особенным. Пошел отсчет.", "Твой шанс! Делай максимально красивый снимок.", "Время пришло. В объективе — жизнь."];
     const phrasesWalk = ["Время вышло. Идем дальше.", "Кадр готов. Продолжаем прогулку.", "Снимок сделан? Отлично, ищем новый сюжет.", "Минута позади. Двигаемся к следующей точке.", "Заметь детали, которых никто не видит. Продолжаем прогулку.", "Меняй ракурс, ищи свет. Идем дальше.", "Не спеши, доверься интуиции. Продолжаем путь.", "Город — это твой холст. Идем дальше."];
 
-    let audioCtx = null, backgroundNode = null, state = 'idle', running = false;
+    /* Переменные состояния */
+    let audioCtx = null, backgroundNode = null, dummyAudio = null, state = 'idle', running = false;
     let isMinutes = true; 
     const btn = document.getElementById('btn'), prog = document.getElementById('progress'), unitToggle = document.getElementById('unitToggle');
 
-    // Фоновый воркер
+    /* Воркер таймера */
     const workerCode = `
         let timer = null;
         self.onmessage = function(e) {
@@ -105,31 +110,21 @@
     `;
     const worker = new Worker(URL.createObjectURL(new Blob([workerCode], { type: 'application/javascript' })));
 
-    // Функция звукового сигнала
-    function playBeep() {
-        if (!audioCtx) return;
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.frequency.value = 880; 
-        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.3);
-        osc.start();
-        osc.stop(audioCtx.currentTime + 0.3);
-    }
-
-    // Инициализация аудио-замка
-    function initPersistence() {
+    /* Инициализация аудио-замка (фоновый режим) */
+    function startBackgroundAudio() {
         if (audioCtx) return;
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         
-        // Генерация тишины, чтобы удержать процесс
+        // Генерация тишины для удержания аудио-сессии
         let osc = audioCtx.createOscillator();
         let gain = audioCtx.createGain();
         osc.frequency.value = 20; 
         gain.gain.value = 0.0001; 
         osc.connect(gain); gain.connect(audioCtx.destination); osc.start(); backgroundNode = osc;
+        
+        // Фиктивное аудио для MediaSession
+        if (!dummyAudio) { dummyAudio = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAAAD'); dummyAudio.loop = true; }
+        dummyAudio.play().catch(() => {});
         
         if ('mediaSession' in navigator) {
             navigator.mediaSession.metadata = new MediaMetadata({ title: 'Фотопрогулка (активна)', artist: 'Олег Романов' });
@@ -137,14 +132,37 @@
         }
     }
 
-    function speak(text) {
-        playBeep(); // Звуковой сигнал перед речью
-        speechSynthesis.cancel();
-        let u = new SpeechSynthesisUtterance(text);
-        u.lang = 'ru-RU';
-        speechSynthesis.speak(u);
+    /* Пикающий звук */
+    function playBeep() {
+        if (!audioCtx) return;
+        let osc = audioCtx.createOscillator();
+        let gain = audioCtx.createGain();
+        osc.frequency.value = 880;
+        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.3);
     }
 
+    /* Остановка аудио */
+    function stopBackgroundAudio() {
+        if (backgroundNode) { try { backgroundNode.stop(); } catch(e){} backgroundNode = null; }
+        if (dummyAudio) { try { dummyAudio.pause(); dummyAudio.src = ""; dummyAudio = null; } catch(e){} }
+        if (audioCtx) { try { audioCtx.close(); audioCtx = null; } catch(e){} }
+    }
+
+    /* Голосовое оповещение + звук */
+    function speak(text) {
+        playBeep(); // Пикаем перед речью
+        speechSynthesis.cancel();
+        let utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'ru-RU';
+        speechSynthesis.speak(utterance);
+    }
+
+    /* Обработка таймера */
     worker.onmessage = function(e) {
         if (!running) return;
         let timeLeft = e.data.timeLeft, phase = e.data.phase;
@@ -158,30 +176,35 @@
         }
     };
 
+    /* Интерфейс */
     function updateUI() {
-        let min = document.getElementById('minR'), max = document.getElementById('maxR'), fill = document.getElementById('trackFill');
+        let min = document.getElementById('minR'), max = document.getElementById('maxR');
+        let fill = document.getElementById('trackFill');
         if (+min.value > +max.value) min.value = max.value;
         document.getElementById('val').textContent = `${min.value} - ${max.value}`;
         let minP = (min.value - min.min) / (min.max - min.min) * 100;
         let maxP = (max.value - max.min) / (max.max - max.min) * 100;
-        fill.style.left = minP + "%"; fill.style.width = (maxP - minP) + "%";
+        fill.style.left = minP + "%";
+        fill.style.width = (maxP - minP) + "%";
     }
 
     document.getElementById('minR').oninput = document.getElementById('maxR').oninput = updateUI;
     unitToggle.onclick = () => { isMinutes = !isMinutes; unitToggle.textContent = isMinutes ? "Интервал (мин)" : "Интервал (сек)"; updateUI(); };
     updateUI();
 
+    /* Кнопка старта */
     btn.onclick = () => {
         if (state === 'idle') {
-            initPersistence(); // Включаем аудио-замок
             state = 'walk'; running = true;
             btn.style.background = "#2e7d32";
             document.getElementById('btnText').textContent = "СТОП";
+            startBackgroundAudio(); // Всегда запускаем аудио-замок
             speak(phrasesStart[Math.floor(Math.random() * phrasesStart.length)]);
             cycle();
         } else if (state === 'shot') { nextPhase(); }
     };
 
+    /* Удержание кнопки стоп */
     let holdTimer;
     btn.onpointerdown = () => {
         if (state === 'idle') return;
@@ -189,15 +212,12 @@
         holdTimer = setInterval(() => {
             let elapsed = Date.now() - start;
             prog.style.width = Math.min(100, elapsed / 10) + "%";
-            if (elapsed > 1000) { 
-                worker.postMessage({ action: 'stop' }); 
-                if (audioCtx) audioCtx.close();
-                location.reload(); 
-            }
+            if (elapsed > 1000) { worker.postMessage({ action: 'stop' }); stopBackgroundAudio(); location.reload(); }
         }, 30);
     };
     btn.onpointerup = btn.onpointerleave = () => { clearInterval(holdTimer); prog.style.width = "0%"; };
 
+    /* Логика фаз */
     function cycle() {
         if (!running) return;
         let minVal = +document.getElementById('minR').value, maxVal = +document.getElementById('maxR').value;
@@ -221,6 +241,12 @@
         btn.style.background = "#2e7d32"; btn.style.color = "#fff";
         document.getElementById('btnText').textContent = "СТОП";
         cycle();
+    }
+
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW error', err));
+        });
     }
 </script>
 </body>
