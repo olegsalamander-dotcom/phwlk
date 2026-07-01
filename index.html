@@ -44,7 +44,7 @@
 <body>
 
 <div class="app">
-    <h1>Фотопрогулка 1.0</h1>
+    <h1>Фотопрогулка 1.1</h1>
     <div class="instruction">
         Ходи по городу и делай фото. В случайный момент тебе поступит сигнал. У тебя будет ровно 1 минута, чтобы сделать кадр.
         <br><br>
@@ -288,7 +288,7 @@
 
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-            navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW error', err));
+            navigator.serviceWorker.register('/service-worker.js').catch(err => console.log('SW error', err));
         });
     }
 </script>
