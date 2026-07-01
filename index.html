@@ -44,7 +44,7 @@
 <body>
 
 <div class="app">
-    <h1>Фотопрогулка 1.5</h1>
+    <h1>Фотопрогулка 1.6</h1>
     <div class="instruction">
         Ходи по городу и делай фото. В случайный момент тебе поступит сигнал. У тебя будет ровно 1 минута, чтобы сделать кадр.
         <br><br>
@@ -83,7 +83,7 @@
 </div>
 
 <script>
-    /* Данные фраз */
+    /* Данные фраз (сохранены для совместимости структуры) */
     const phrasesStart = ["Прогулка началась. Вдохновляйся моментом.", "Режим фотоохоты включен. Наблюдай за городом.", "Фотопрогулка активирована. Начинаем снимать.", "Город ждет твой лучший кадр. Погнали."];
     const phrasesShot = ["Внимание, снимай! У тебя минута.", "Лови момент! Время для кадра.", "Сделай этот кадр особенным. Пошел отсчет.", "Твой шанс! Делай максимально красивый снимок.", "Время пришло. В объективе — жизнь."];
     const phrasesWalk = ["Время вышло. Идем дальше.", "Кадр готов. Продолжаем прогулку.", "Снимок сделан? Отлично, ищем новый сюжет.", "Минута позади. Двигаемся к следующей точке.", "Заметь детали, которых никто не видит. Продолжаем прогулку.", "Меняй ракурс, ищи свет. Идем дальше.", "Не спеши, доверься интуиции. Продолжаем путь.", "Город — это твой холст. Идем дальше."];
@@ -138,24 +138,49 @@
         if ('mediaSession' in navigator) {
             navigator.mediaSession.metadata = new MediaMetadata({ title: 'Фотопрогулка (активна)', artist: 'Олег Романов' });
             navigator.mediaSession.playbackState = "playing";
-            // Пустые обработчики, чтобы система не сбрасывала аудиосессию
             navigator.mediaSession.setActionHandler('play', () => { if(dummyAudio) dummyAudio.play(); });
             navigator.mediaSession.setActionHandler('pause', () => { if(dummyAudio) dummyAudio.play(); });
         }
     }
 
-    /* Пикающий звук */
-    function playBeep() {
+    /* Вспомогательный метод одиночного пика */
+    function createBeepNode(freq, duration, startTimeOffset) {
         if (!audioCtx) return;
         let osc = audioCtx.createOscillator();
         let gain = audioCtx.createGain();
-        osc.frequency.value = 880;
-        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.1, audioCtx.currentTime + startTimeOffset);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + startTimeOffset + duration);
         osc.connect(gain);
         gain.connect(audioCtx.destination);
-        osc.start();
-        osc.stop(audioCtx.currentTime + 0.3);
+        osc.start(audioCtx.currentTime + startTimeOffset);
+        osc.stop(audioCtx.currentTime + startTimeOffset + duration);
+    }
+
+    /* Новая механика кодовых сигналов */
+    function playSignal(type) {
+        if (!audioCtx) return;
+        
+        if (type === 'start') {
+            // Триоль: три быстрых пика с повышением тональности
+            createBeepNode(600, 0.1, 0.0);
+            createBeepNode(750, 0.1, 0.12);
+            createBeepNode(900, 0.15, 0.24);
+        } 
+        else if (type === 'shot') {
+            // Время снимать: обратный отсчет из 5 коротких пиков и 1 длинного
+            createBeepNode(880, 0.08, 0.0);
+            createBeepNode(880, 0.08, 1.0);
+            createBeepNode(880, 0.08, 2.0);
+            createBeepNode(880, 0.08, 3.0);
+            createBeepNode(880, 0.08, 4.0);
+            createBeepNode(1200, 0.6, 5.0); // Финальный длинный
+        } 
+        else if (type === 'walk') {
+            // Идти дальше: два спокойных низких сигнала
+            createBeepNode(440, 0.2, 0.0);
+            createBeepNode(440, 0.2, 0.35);
+        }
     }
 
     /* Остановка аудио */
@@ -163,15 +188,6 @@
         if (backgroundNode) { try { backgroundNode.stop(); } catch(e){} backgroundNode = null; }
         if (dummyAudio) { try { dummyAudio.pause(); dummyAudio.srcObject = null; dummyAudio = null; } catch(e){} }
         if (audioCtx) { try { audioCtx.close(); audioCtx = null; } catch(e){} }
-    }
-
-    /* Голосовое оповещение + звук */
-    function speak(text) {
-        playBeep(); // Пикаем перед речью
-        speechSynthesis.cancel();
-        let utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = 'ru-RU';
-        speechSynthesis.speak(utterance);
     }
 
     /* Обработка таймера */
@@ -211,7 +227,7 @@
             btn.style.background = "#2e7d32";
             document.getElementById('btnText').textContent = "СТОП";
             startBackgroundAudio(); // Всегда запускаем аудио-замок
-            speak(phrasesStart[Math.floor(Math.random() * phrasesStart.length)]);
+            playSignal('start');
             cycle();
         } else if (state === 'shot') { nextPhase(); }
     };
@@ -241,7 +257,7 @@
 
     function triggerShot() {
         state = 'shot';
-        speak(phrasesShot[Math.floor(Math.random() * phrasesShot.length)]);
+        playSignal('shot');
         document.getElementById('status').textContent = "ДЕЛАЙ КАДР!";
         btn.style.background = "#fbc02d"; btn.style.color = "#000";
         worker.postMessage({ action: 'start', endTime: Date.now() + 60000, phase: 'shot' });
@@ -249,7 +265,7 @@
 
     function nextPhase() {
         state = 'walk';
-        speak(phrasesWalk[Math.floor(Math.random() * phrasesWalk.length)]);
+        playSignal('walk');
         btn.style.background = "#2e7d32"; btn.style.color = "#fff";
         document.getElementById('btnText').textContent = "СТОП";
         cycle();
