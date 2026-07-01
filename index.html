@@ -1,9 +1,16 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <link rel="manifest" href="manifest.json">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <link rel="manifest" href="manifest.json">
+    
+    <!-- Мета-теги для работы как отдельное приложение -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Фотопрогулка">
+    
     <title>ФОТОПРОГУЛКА</title>
     <style>
         :root { 
@@ -41,7 +48,7 @@
 <body>
 
 <div class="app">
-    <h1>Фотопрогулка</h1>
+    <h1>Фотопрогулка 1.1</h1>
     <div class="instruction">
         Надевай наушники, включай музыку и иди гулять. В случайное время ты получишь сигнал и у тебя будет ровно одна минута, чтобы сделать кадр. Делай красивый кадр в том месте, где находишься. Когда фото будет готово нажми "кадр сделан" или просто продолжай прогулку когда таймер истечёт.
         <br><br>
@@ -148,8 +155,10 @@
         currentUtterance.lang = 'ru-RU';
         window.activeUtterances.push(currentUtterance);
         
+        // Исправленный возврат громкости: задержка после окончания речи
         currentUtterance.onend = currentUtterance.onerror = () => {
             window.activeUtterances = window.activeUtterances.filter(u => u !== currentUtterance);
+            setTimeout(stopBackgroundAudio, 500); 
             currentUtterance = null;
         };
         setTimeout(() => { speechSynthesis.speak(currentUtterance); }, 50);
@@ -168,7 +177,7 @@
             state = 'walk'; running = true;
             btn.style.background = "#2e7d32";
             document.getElementById('btnText').textContent = "СТОП";
-            startBackgroundAudio(); // Держим аудио поток открытым постоянно для предотвращения сна
+            startBackgroundAudio(); 
             speak(phrasesStart[Math.floor(Math.random() * phrasesStart.length)]);
             cycle();
         } else if (state === 'shot') { nextPhase(); }
