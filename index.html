@@ -44,7 +44,7 @@
 <body>
 
 <div class="app">
-    <h1>Фотопрогулка 1.4</h1>
+    <h1>Фотопрогулка 1.5</h1>
     <div class="instruction">
         Ходи по городу и делай фото. В случайный момент тебе поступит сигнал. У тебя будет ровно 1 минута, чтобы сделать кадр.
         <br><br>
@@ -115,20 +115,32 @@
         if (audioCtx) return;
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         
-        // Генерация тишины для удержания аудио-сессии
+        // Создаем непрерывный аудио-стрим для обхода жестких ограничений засыпания iOS/Android
+        const destination = audioCtx.createMediaStreamDestination();
         let osc = audioCtx.createOscillator();
         let gain = audioCtx.createGain();
         osc.frequency.value = 20; 
         gain.gain.value = 0.0001; 
-        osc.connect(gain); gain.connect(audioCtx.destination); osc.start(); backgroundNode = osc;
+        osc.connect(gain); 
+        gain.connect(audioCtx.destination);
+        gain.connect(destination);
+        osc.start(); 
+        backgroundNode = osc;
         
-        // Фиктивное аудио для MediaSession
-        if (!dummyAudio) { dummyAudio = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAAAD'); dummyAudio.loop = true; }
+        // Передаем стрим в HTML5 Audio для регистрации на уровне системы
+        if (!dummyAudio) { 
+            dummyAudio = new Audio();
+            dummyAudio.srcObject = destination.stream;
+            dummyAudio.loop = true; 
+        }
         dummyAudio.play().catch(() => {});
         
         if ('mediaSession' in navigator) {
             navigator.mediaSession.metadata = new MediaMetadata({ title: 'Фотопрогулка (активна)', artist: 'Олег Романов' });
             navigator.mediaSession.playbackState = "playing";
+            // Пустые обработчики, чтобы система не сбрасывала аудиосессию
+            navigator.mediaSession.setActionHandler('play', () => { if(dummyAudio) dummyAudio.play(); });
+            navigator.mediaSession.setActionHandler('pause', () => { if(dummyAudio) dummyAudio.play(); });
         }
     }
 
@@ -149,7 +161,7 @@
     /* Остановка аудио */
     function stopBackgroundAudio() {
         if (backgroundNode) { try { backgroundNode.stop(); } catch(e){} backgroundNode = null; }
-        if (dummyAudio) { try { dummyAudio.pause(); dummyAudio.src = ""; dummyAudio = null; } catch(e){} }
+        if (dummyAudio) { try { dummyAudio.pause(); dummyAudio.srcObject = null; dummyAudio = null; } catch(e){} }
         if (audioCtx) { try { audioCtx.close(); audioCtx = null; } catch(e){} }
     }
 
