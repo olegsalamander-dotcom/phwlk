@@ -28,7 +28,7 @@
 <body>
 
 <div class="app">
-    <h1>Фотопрогулка 1.7</h1>
+    <h1>Фотопрогулка 1.8</h1>
     <div class="instruction">
         Надевай наушники, включай музыку и иди гулять. В случайное время ты получишь сигнал и у тебя будет ровно одна минута, чтобы сделать кадр. Делай красивый кадр в том месте, где находишься. Когда фото будет готово нажми "кадр сделан" или просто продолжай прогулку когда таймер истечёт.
         <br><br>
@@ -98,7 +98,7 @@
         }
     }
 
-    function speak(text) {
+    function speak(text, callback) {
         startBackgroundAudio();
         for(let i=0; i<3; i++) {
             setTimeout(()=>{
@@ -112,6 +112,7 @@
         speechSynthesis.cancel();
         let u = new SpeechSynthesisUtterance(text);
         u.lang = 'ru-RU';
+        u.onend = () => { if(callback) callback(); };
         speechSynthesis.speak(u);
     }
 
@@ -149,10 +150,9 @@
     worker.onmessage = (e) => {
         if (e.data.phase === 'walk' && e.data.timeLeft <= 0) {
             state = 'shot'; 
-            startBackgroundAudio(); // Убедимся, что звук активен
-            speak(phrasesShot[0]);
             document.getElementById('status').textContent = "ДЕЛАЙ КАДР!";
             btn.style.background = "#fbc02d";
+            speak(phrasesShot[0], () => { startBackgroundAudio(); });
             worker.postMessage({ action: 'start', endTime: Date.now() + 60000, phase: 'shot' });
         } else if (e.data.phase === 'shot') {
             document.getElementById('btnText').textContent = `КАДР СДЕЛАН (${e.data.timeLeft})`;
