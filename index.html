@@ -44,7 +44,7 @@
 <body>
 
 <div class="app">
-    <h1>Фотопрогулка 1.6</h1>
+    <h1>Фотопрогулка 1.7</h1>
     <div class="instruction">
         Ходи по городу и делай фото. В случайный момент тебе поступит сигнал. У тебя будет ровно 1 минута, чтобы сделать кадр.
         <br><br>
@@ -83,7 +83,7 @@
 </div>
 
 <script>
-    /* Данные фраз (сохранены для совместимости структуры) */
+    /* Данные фраз */
     const phrasesStart = ["Прогулка началась. Вдохновляйся моментом.", "Режим фотоохоты включен. Наблюдай за городом.", "Фотопрогулка активирована. Начинаем снимать.", "Город ждет твой лучший кадр. Погнали."];
     const phrasesShot = ["Внимание, снимай! У тебя минута.", "Лови момент! Время для кадра.", "Сделай этот кадр особенным. Пошел отсчет.", "Твой шанс! Делай максимально красивый снимок.", "Время пришло. В объективе — жизнь."];
     const phrasesWalk = ["Время вышло. Идем дальше.", "Кадр готов. Продолжаем прогулку.", "Снимок сделан? Отлично, ищем новый сюжет.", "Минута позади. Двигаемся к следующей точке.", "Заметь детали, которых никто не видит. Продолжаем прогулку.", "Меняй ракурс, ищи свет. Идем дальше.", "Не спеши, доверься интуиции. Продолжаем путь.", "Город — это твой холст. Идем дальше."];
@@ -91,6 +91,7 @@
     /* Переменные состояния */
     let audioCtx = null, backgroundNode = null, dummyAudio = null, state = 'idle', running = false;
     let isMinutes = true; 
+    let lastBeepTime = 0; // Для отслеживания посекундного пикания в обратном отсчете
     const btn = document.getElementById('btn'), prog = document.getElementById('progress'), unitToggle = document.getElementById('unitToggle');
 
     /* Воркер таймера */
@@ -138,6 +139,7 @@
         if ('mediaSession' in navigator) {
             navigator.mediaSession.metadata = new MediaMetadata({ title: 'Фотопрогулка (активна)', artist: 'Олег Романов' });
             navigator.mediaSession.playbackState = "playing";
+            // Пустые обработчики, чтобы система не сбрасывала аудиосессию
             navigator.mediaSession.setActionHandler('play', () => { if(dummyAudio) dummyAudio.play(); });
             navigator.mediaSession.setActionHandler('pause', () => { if(dummyAudio) dummyAudio.play(); });
         }
@@ -149,7 +151,8 @@
         let osc = audioCtx.createOscillator();
         let gain = audioCtx.createGain();
         osc.frequency.value = freq;
-        gain.gain.setValueAtTime(0.1, audioCtx.currentTime + startTimeOffset);
+        // Увеличенная громкость (gain) установлена на 1.0, чтобы перебивать музыку в фоне
+        gain.gain.setValueAtTime(1.0, audioCtx.currentTime + startTimeOffset);
         gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + startTimeOffset + duration);
         osc.connect(gain);
         gain.connect(audioCtx.destination);
@@ -167,14 +170,13 @@
             createBeepNode(750, 0.1, 0.12);
             createBeepNode(900, 0.15, 0.24);
         } 
-        else if (type === 'shot') {
-            // Время снимать: обратный отсчет из 5 коротких пиков и 1 длинного
+        else if (type === 'countdown') {
+            // Короткий предупреждающий пик обратного отсчета
             createBeepNode(880, 0.08, 0.0);
-            createBeepNode(880, 0.08, 1.0);
-            createBeepNode(880, 0.08, 2.0);
-            createBeepNode(880, 0.08, 3.0);
-            createBeepNode(880, 0.08, 4.0);
-            createBeepNode(1200, 0.6, 5.0); // Финальный длинный
+        }
+        else if (type === 'shot') {
+            // Финальный длинный сигнал начала съемки
+            createBeepNode(1200, 0.6, 0.0);
         } 
         else if (type === 'walk') {
             // Идти дальше: два спокойных низких сигнала
@@ -197,6 +199,15 @@
         if (phase === 'walk') {
             let displayTime = isMinutes && timeLeft >= 60 ? `${Math.floor(timeLeft / 60)}м ${timeLeft % 60}с` : `${timeLeft}с`;
             document.getElementById('timerDisplay').textContent = `До сигнала: ${displayTime}`;
+            
+            // Запуск обратного отсчета за 5 секунд до начала съемки
+            if (timeLeft <= 5 && timeLeft > 0) {
+                if (lastBeepTime !== timeLeft) {
+                    lastBeepTime = timeLeft;
+                    playSignal('countdown');
+                }
+            }
+            
             if (timeLeft <= 0) { worker.postMessage({ action: 'stop' }); triggerShot(); }
         } else if (phase === 'shot') {
             document.getElementById('btnText').textContent = `КАДР СДЕЛАН (${timeLeft})`;
@@ -252,6 +263,7 @@
         let randomUnits = Math.floor(Math.random() * (maxVal - minVal + 1) + minVal);
         let endTime = Date.now() + randomUnits * (isMinutes ? 60 : 1) * 1000;
         document.getElementById('status').textContent = "Идёт прогулка";
+        lastBeepTime = 0; // Сбрасываем счетчик пиков для нового интервала
         worker.postMessage({ action: 'start', endTime: endTime, phase: 'walk' });
     }
 
