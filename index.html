@@ -41,7 +41,7 @@
 <body>
 
 <div class="app">
-    <h1>Фотопрогулка 1.9</h1>
+    <h1>Фотопрогулка</h1>
     <div class="instruction">
         Надевай наушники, включай музыку и иди гулять. В случайное время ты получишь сигнал и у тебя будет ровно одна минута, чтобы сделать кадр. Делай красивый кадр в том месте, где находишься. Когда фото будет готово нажми "кадр сделан" или просто продолжай прогулку когда таймер истечёт.
         <br><br>
@@ -84,18 +84,10 @@
     const phrasesWalk = ["Время вышло. Идем дальше.", "Кадр готов. Продолжаем прогулку.", "Снимок сделан? Отлично, ищем новый сюжет.", "Минута позади. Двигаемся к следующей точке.", "Заметь детали, которых никто не видит. Продолжаем прогулку.", "Меняй ракурс, ищи свет. Идем дальше.", "Не спеши, доверься интуиции. Продолжаем путь.", "Город — это твой холст. Идем дальше."];
 
     let audioCtx = null, backgroundNode = null, dummyAudio = null, state = 'idle', running = false, currentUtterance = null;
-    let isMinutes = false, wakeLock = null;
+    let isMinutes = false;
     window.activeUtterances = [];
     
     const btn = document.getElementById('btn'), prog = document.getElementById('progress'), unitToggle = document.getElementById('unitToggle');
-
-    // Функция запроса Wake Lock
-    async function requestWakeLock() {
-        try {
-            wakeLock = await navigator.wakeLock.request('screen');
-            wakeLock.addEventListener('release', () => console.log('Wake Lock освобожден'));
-        } catch (err) { console.error(`${err.name}, ${err.message}`); }
-    }
 
     const workerCode = `
         let timer = null;
@@ -136,6 +128,10 @@
             osc.connect(gain); gain.connect(audioCtx.destination); osc.start(); backgroundNode = osc;
             if (!dummyAudio) { dummyAudio = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAAAD'); dummyAudio.loop = true; }
             dummyAudio.play().catch(() => {});
+            if ('mediaSession' in navigator) {
+                navigator.mediaSession.metadata = new MediaMetadata({ title: 'Фотопрогулка', artist: 'Олег Романов' });
+                navigator.mediaSession.playbackState = "playing";
+            }
         }
     }
 
@@ -145,41 +141,17 @@
         if (audioCtx) { try { audioCtx.close(); audioCtx = null; } catch(e){} }
     }
 
-    function playSignal() {
-        if (!audioCtx) return;
-        for (let i = 0; i < 3; i++) {
-            setTimeout(() => {
-                if (!audioCtx) return;
-                let osc = audioCtx.createOscillator();
-                let gain = audioCtx.createGain();
-                osc.type = 'sine'; osc.frequency.value = 950;
-                gain.gain.setValueAtTime(0.8, audioCtx.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
-                osc.connect(gain); gain.connect(audioCtx.destination);
-                osc.start(); osc.stop(audioCtx.currentTime + 0.4);
-            }, i * 400);
-        }
-    }
-
     function speak(text) {
         startBackgroundAudio();
-        playSignal();
         speechSynthesis.cancel();
         currentUtterance = new SpeechSynthesisUtterance(text);
         currentUtterance.lang = 'ru-RU';
         window.activeUtterances.push(currentUtterance);
-        let cleaned = false;
-        const restoreVolume = () => {
-            if (cleaned) return;
-            cleaned = true;
-            clearTimeout(safetyTimeout);
-            speechSynthesis.cancel();
+        
+        currentUtterance.onend = currentUtterance.onerror = () => {
             window.activeUtterances = window.activeUtterances.filter(u => u !== currentUtterance);
-            stopBackgroundAudio();
             currentUtterance = null;
         };
-        currentUtterance.onend = currentUtterance.onerror = restoreVolume;
-        const safetyTimeout = setTimeout(restoreVolume, (text.length * 150) + 3000);
         setTimeout(() => { speechSynthesis.speak(currentUtterance); }, 50);
     }
 
@@ -196,7 +168,7 @@
             state = 'walk'; running = true;
             btn.style.background = "#2e7d32";
             document.getElementById('btnText').textContent = "СТОП";
-            requestWakeLock(); // Включаем запрет засыпания
+            startBackgroundAudio(); // Держим аудио поток открытым постоянно для предотвращения сна
             speak(phrasesStart[Math.floor(Math.random() * phrasesStart.length)]);
             cycle();
         } else if (state === 'shot') { nextPhase(); }
@@ -209,10 +181,7 @@
         holdTimer = setInterval(() => {
             let elapsed = Date.now() - start;
             prog.style.width = Math.min(100, elapsed / 10) + "%";
-            if (elapsed > 1000) {
-                if (wakeLock) wakeLock.release(); // Освобождаем Wake Lock
-                worker.postMessage({ action: 'stop' }); stopBackgroundAudio(); location.reload();
-            }
+            if (elapsed > 1000) { worker.postMessage({ action: 'stop' }); stopBackgroundAudio(); location.reload(); }
         }, 30);
     };
     btn.onpointerup = btn.onpointerleave = () => { clearInterval(holdTimer); prog.style.width = "0%"; };
