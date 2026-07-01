@@ -1,10 +1,42 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
+    <link rel="manifest" href="manifest.json">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>ФОТОПРОГУЛКА</title>
-    <link rel="stylesheet" href="css/style.css">
+    <style>
+        :root { 
+            --bg: #0f0f12; 
+            --panel: #1a1a1f; 
+            --accent: #5e6ad2; 
+            --text: #e1e1e6; 
+            --text-dim: #71717a; 
+            --border: #27272a;
+        }
+        body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        .app { width: 100%; max-width: 400px; padding: 24px; }
+        h1 { font-size: 20px; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 20px; text-align: center; color: var(--text); }
+        
+        .instruction { font-size: 13px; color: var(--text-dim); text-align: center; margin-bottom: 30px; line-height: 1.6; }
+        
+        .status { padding: 16px; border: 1px solid var(--border); border-radius: 12px; text-align: center; margin-bottom: 20px; font-size: 14px; font-weight: 500; }
+        
+        button { width: 100%; padding: 18px; border: none; border-radius: 12px; font-weight: 600; font-size: 15px; cursor: pointer; position: relative; overflow: hidden; background: var(--accent); color: white; transition: opacity 0.2s; }
+        button:active { opacity: 0.8; }
+        .hold-progress { position: absolute; left: 0; top: 0; height: 100%; background: rgba(0,0,0,0.2); width: 0%; pointer-events: none; }
+        
+        .panel { padding: 20px; border-radius: 16px; background: var(--panel); border: 1px solid var(--border); margin-top: 20px; }
+        .slider-wrap { position: relative; height: 40px; margin-top: 10px; }
+        .track { position: absolute; top: 18px; width: 100%; height: 2px; background: var(--border); }
+        .ticks { display: flex; justify-content: space-between; font-size: 9px; color: var(--text-dim); padding: 0 4px; }
+        input[type=range] { position: absolute; width: 100%; pointer-events: none; -webkit-appearance: none; background: none; }
+        input[type=range]::-webkit-slider-thumb { pointer-events: all; width: 16px; height: 16px; border-radius: 50%; background: var(--text); cursor: pointer; }
+        
+        /* Footer */
+        .footer { margin-top: 30px; text-align: center; font-size: 12px; color: var(--text-dim); }
+        .footer a { color: var(--accent); text-decoration: none; margin: 0 8px; }
+    </style>
 </head>
 <body>
 
@@ -46,6 +78,322 @@
     </div>
 </div>
 
-<script src="js/app.js"></script>
+<script>
+    // Пулы фраз для рандомизации озвучки
+    const phrasesStart = [
+        "Прогулка началась. Вдохновляйся моментом.",
+        "Режим фотоохоты включен. Наблюдай за городом.",
+        "Фотопрогулка активирована. Начинаем снимать.",
+        "Город ждет твой лучший кадр. Погнали."
+    ];
+
+    const phrasesShot = [
+        "Внимание, снимай! У тебя минута.",
+        "Лови момент! Время для кадра.",
+        "Сделай этот кадр особенным. Пошел отсчет.",
+        "Твой шанс! Делай максимально красивый снимок.",
+        "Время пришло. В объективе — жизнь."
+    ];
+
+    const phrasesWalk = [
+        "Время вышло. Идем дальше.",
+        "Кадр готов. Продолжаем прогулку.",
+        "Снимок сделан? Отлично, ищем новый сюжет.",
+        "Минута позади. Двигаемся к следующей точке.",
+        "Заметь детали, которых никто не видит. Продолжаем прогулку.",
+        "Меняй ракурс, ищи свет. Идем дальше.",
+        "Не спеши, доверься интуиции. Продолжаем путь.",
+        "Город — это твой холст. Идем дальше."
+    ];
+
+    // Основная логика работы
+    let audioCtx = null;
+    let backgroundNode = null;
+    let dummyAudio = null; 
+    let state = 'idle', running = false, count = 0;
+    let isMinutes = false; 
+    let currentUtterance = null; 
+    
+    // Глобальный массив-якорь для защиты речевых потоков от сборщика мусора Android
+    window.activeUtterances = [];
+    
+    const btn = document.getElementById('btn');
+    const prog = document.getElementById('progress');
+    const unitToggle = document.getElementById('unitToggle');
+
+    // Инициализация Web Worker для фонового точного счета времени без засыпания вкладки
+    const workerCode = `
+        let timer = null;
+        self.onmessage = function(e) {
+            if (e.data.action === 'start') {
+                clearInterval(timer);
+                let endTime = e.data.endTime;
+                timer = setInterval(() => {
+                    let timeLeft = Math.max(0, Math.round((endTime - Date.now()) / 1000));
+                    self.postMessage({ action: 'tick', timeLeft: timeLeft, phase: e.data.phase });
+                    if (timeLeft <= 0) {
+                        clearInterval(timer);
+                    }
+                }, 250);
+            } else if (e.data.action === 'stop') {
+                clearInterval(timer);
+            }
+        };
+    `;
+    const blob = new Blob([workerCode], { type: 'application/javascript' });
+    const worker = new Worker(URL.createObjectURL(blob));
+
+    // Обработка тиков времени из фонового воркера
+    worker.onmessage = function(e) {
+        if (!running) return;
+        let timeLeft = e.data.timeLeft;
+        let phase = e.data.phase;
+        
+        if (phase === 'walk') {
+            let displayTime = isMinutes && timeLeft >= 60 
+                ? `${Math.floor(timeLeft / 60)}м ${timeLeft % 60}с` 
+                : `${timeLeft}с`;
+                
+            document.getElementById('timerDisplay').textContent = `До сигнала: ${displayTime}`;
+            
+            if (timeLeft <= 0) {
+                worker.postMessage({ action: 'stop' });
+                triggerShot();
+            }
+        } else if (phase === 'shot') {
+            document.getElementById('btnText').textContent = `КАДР СДЕЛАН (${timeLeft})`;
+            
+            if (timeLeft <= 0) {
+                worker.postMessage({ action: 'stop' });
+                nextPhase();
+            }
+        }
+    };
+
+    // Фоноудерживающий движок
+    function startBackgroundAudio() {
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (audioCtx.state === 'suspended') {
+            audioCtx.resume();
+        }
+        if (!backgroundNode) {
+            // Генерируем постоянный микро-сигнал 20Гц, заставляющий систему держать вкладку активной
+            let osc = audioCtx.createOscillator();
+            let gain = audioCtx.createGain();
+            osc.frequency.value = 20;
+            gain.gain.value = 0.002;
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            backgroundNode = osc;
+
+            // Дублирующий пустой аудиопоток для стабильности на мобильных устройствах
+            if (!dummyAudio) {
+                dummyAudio = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAAAD');
+                dummyAudio.loop = true;
+            }
+            dummyAudio.play().catch(() => {});
+
+            if ('mediaSession' in navigator) {
+                navigator.mediaSession.metadata = new MediaMetadata({
+                    title: 'Фотопрогулка',
+                    artist: 'Олег Романов'
+                });
+            }
+        }
+    }
+
+    // Полная остановка и уничтожение аудиосистемы для освобождения микшера Android
+    function stopBackgroundAudio() {
+        if (backgroundNode) {
+            try { backgroundNode.stop(); } catch(e){}
+            backgroundNode = null;
+        }
+        if (dummyAudio) {
+            try {
+                dummyAudio.pause();
+                dummyAudio.src = "";
+                dummyAudio = null;
+            } catch(e){}
+        }
+        if (audioCtx) {
+            try {
+                audioCtx.close();
+                audioCtx = null;
+            } catch(e){}
+        }
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.playbackState = "none";
+        }
+    }
+
+    // Тройной звуковой сигнал для гарантированного пробития фона и приглушения музыки
+    function playSignal() {
+        if (!audioCtx) return;
+        for (let i = 0; i < 3; i++) {
+            setTimeout(() => {
+                if (!audioCtx) return;
+                let osc = audioCtx.createOscillator();
+                let gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.value = 950;
+                gain.gain.setValueAtTime(0.8, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.4);
+            }, i * 400);
+        }
+    }
+
+    function speak(text) {
+        startBackgroundAudio();
+        playSignal(); // Подаем железный звуковой сигнал через AudioContext
+
+        // Голосовое сопровождение
+        speechSynthesis.cancel();
+        
+        currentUtterance = new SpeechSynthesisUtterance(text);
+        currentUtterance.lang = 'ru-RU';
+        window.activeUtterances.push(currentUtterance); // Защита от сборщика мусора
+        
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.playbackState = "playing";
+        }
+
+        let cleaned = false;
+        const restoreVolume = () => {
+            if (cleaned) return;
+            cleaned = true;
+            clearTimeout(safetyTimeout);
+
+            speechSynthesis.cancel();
+            window.activeUtterances = window.activeUtterances.filter(u => u !== currentUtterance);
+
+            // КОРЕНЬ РЕШЕНИЯ ДЛЯ АНДРОИД: Полностью ликвидируем все аудио-потоки вкладки.
+            // Когда ОС видит завершение TTS и пустой звуковой стек вкладки — музыка восстанавливается на 100%.
+            stopBackgroundAudio();
+
+            // ТАЙМАУТ ПОВТОРНОГО ВКЛЮЧЕНИЯ ШУМА УДАЛЕН. 
+            // Теперь музыка во время ходьбы будет играть идеально и громко.
+
+            currentUtterance = null;
+        };
+
+        // Подписываемся на стандартные триггеры окончания речи
+        currentUtterance.onend = currentUtterance.onerror = restoreVolume;
+
+        // ЖЕЛЕЗНЫЙ ПРЕДОХРАНИТЕЛЬ: Расчет времени (~150мс на символ + 3 секунды безусловного запаса)
+        const estimatedTime = (text.length * 150) + 3000;
+        const safetyTimeout = setTimeout(restoreVolume, estimatedTime);
+
+        // Микро-пауза перед стартом для корректного разделения аудио-сессий в Android Chrome
+        setTimeout(() => {
+            speechSynthesis.speak(currentUtterance);
+        }, 50);
+    }
+
+    function updateUI() {
+        let min = document.getElementById('minR'), max = document.getElementById('maxR');
+        if (+min.value > +max.value) min.value = max.value;
+        document.getElementById('val').textContent = `${min.value} - ${max.value}`;
+    }
+    document.getElementById('minR').oninput = updateUI;
+    document.getElementById('maxR').oninput = updateUI;
+
+    // Логика работы переключателя режимов (сек/мин)
+    unitToggle.onclick = () => {
+        isMinutes = !isMinutes;
+        unitToggle.textContent = isMinutes ? "Интервал (мин)" : "Интервал (сек)";
+        updateUI();
+    };
+
+    btn.onclick = () => {
+        if (state === 'idle') {
+            state = 'walk'; running = true;
+            btn.style.background = "#2e7d32";
+            document.getElementById('btnText').textContent = "СТОП";
+            
+            const randomPhrase = phrasesStart[Math.floor(Math.random() * phrasesStart.length)];
+            speak(randomPhrase);
+            
+            cycle();
+        } else if (state === 'shot') {
+            nextPhase();
+        }
+    };
+
+    let holdTimer;
+    btn.onpointerdown = () => {
+        if (state === 'idle') return;
+        let start = Date.now();
+        holdTimer = setInterval(() => {
+            let elapsed = Date.now() - start;
+            prog.style.width = Math.min(100, elapsed / 10) + "%";
+            if (elapsed > 1000) {
+                worker.postMessage({ action: 'stop' });
+                stopBackgroundAudio();
+                location.reload();
+            }
+        }, 30);
+    };
+    btn.onpointerup = btn.onpointerleave = () => {
+        clearInterval(holdTimer);
+        prog.style.width = "0%";
+    };
+
+    function cycle() {
+        if (!running) return;
+        let minVal = +document.getElementById('minR').value;
+        let maxVal = +document.getElementById('maxR').value;
+        let randomUnits = Math.floor(Math.random() * (maxVal - minVal + 1) + minVal);
+        
+        let totalSeconds = randomUnits * (isMinutes ? 60 : 1);
+        document.getElementById('status').textContent = "Идёт прогулка";
+        
+        let endTime = Date.now() + totalSeconds * 1000;
+        
+        // Запуск точного фонового отсчета времени через Web Worker
+        worker.postMessage({ action: 'start', endTime: endTime, phase: 'walk' });
+    }
+
+    function triggerShot() {
+        state = 'shot';
+        
+        const randomPhrase = phrasesShot[Math.floor(Math.random() * phrasesShot.length)];
+        speak(randomPhrase);
+        
+        document.getElementById('status').textContent = "ДЕЛАЙ КАДР!";
+        btn.style.background = "#fbc02d";
+        btn.style.color = "#000";
+        
+        let endTime = Date.now() + 60 * 1000;
+        // Передаем минутный отсчет воркеру
+        worker.postMessage({ action: 'start', endTime: endTime, phase: 'shot' });
+    }
+
+    function nextPhase() {
+        state = 'walk';
+        
+        const randomPhrase = phrasesWalk[Math.floor(Math.random() * phrasesWalk.length)];
+        speak(randomPhrase);
+        
+        btn.style.background = "#2e7d32";
+        btn.style.color = "#fff";
+        document.getElementById('btnText').textContent = "СТОП";
+        cycle();
+    }
+    // Регистрация Service Worker
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+            .then(reg => console.log('ServiceWorker зарегистрирован', reg))
+            .catch(err => console.log('Ошибка регистрации ServiceWorker', err));
+    });
+}
+</script>
 </body>
 </html>
