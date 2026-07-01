@@ -1,7 +1,7 @@
 {
   "name": "Фотопрогулка",
   "short_name": "Фотопрогулка",
-  "start_url": "gemini-code.html",
+  "start_url": "index.html",
   "display": "standalone",
   "background_color": "#0f0f12",
   "theme_color": "#5e6ad2",
