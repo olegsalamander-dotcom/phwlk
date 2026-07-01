@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <link rel="manifest" href="manifest.json">
     
-    <!-- Мета-теги для работы как отдельное приложение (PWA) -->
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -23,16 +22,13 @@
         .instruction { font-size: 13px; color: var(--text-dim); text-align: center; margin-bottom: 30px; line-height: 1.6; }
         .status { padding: 16px; border: 1px solid var(--border); border-radius: 12px; text-align: center; margin-bottom: 20px; font-size: 14px; font-weight: 500; }
         
-        /* Кнопка */
         button { width: 100%; padding: 18px; border: none; border-radius: 12px; font-weight: 600; font-size: 15px; cursor: pointer; position: relative; overflow: hidden; background: var(--accent); color: white; transition: opacity 0.2s; }
         button:active { opacity: 0.8; }
         .hold-progress { position: absolute; left: 0; top: 0; height: 100%; background: rgba(0,0,0,0.2); width: 0%; pointer-events: none; }
         
-        /* Панель настроек */
         .panel { padding: 20px; border-radius: 16px; background: var(--panel); border: 1px solid var(--border); margin-top: 20px; }
         .slider-wrap { position: relative; height: 40px; margin-top: 10px; }
         .track { position: absolute; top: 18px; width: 100%; height: 2px; background: var(--border); }
-        /* Закраска диапазона */
         .track-fill { position: absolute; top: 18px; height: 2px; background: var(--accent); pointer-events: none; }
         .ticks { display: flex; justify-content: space-between; font-size: 9px; color: var(--text-dim); padding: 0 4px; }
         input[type=range] { position: absolute; width: 100%; pointer-events: none; -webkit-appearance: none; background: none; }
@@ -45,7 +41,7 @@
 <body>
 
 <div class="app">
-    <h1>Фотопрогулка 1.1</h1>
+    <h1>Фотопрогулка 1.2</h1>
     <div class="instruction">
         Ходи по городу и делай фото. В случайный момент тебе поступит сигнал. У тебя будет ровно 1 минута, чтобы сделать кадр.
         <br><br>
@@ -66,16 +62,15 @@
         </div>
         <div class="slider-wrap">
             <div class="track"></div>
-            <div class="track-fill" id="trackFill"></div> <!-- Элемент закраски -->
+            <div class="track-fill" id="trackFill"></div>
             <div class="ticks"><span>1</span><span>5</span><span>10</span><span>15</span></div>
             <input id="minR" type="range" min="1" max="15" value="3">
             <input id="maxR" type="range" min="1" max="15" value="10">
         </div>
         
-        <!-- Переключатель режима фона -->
         <div style="margin-top: 20px; font-size: 12px; color: var(--text-dim); display: flex; align-items: center; justify-content: center; gap: 8px;">
             <input type="checkbox" id="bgLockToggle" checked>
-            <label for="bgLockToggle" style="cursor:pointer;">Режим работы в фоне (активный)</label>
+            <label for="bgLockToggle" style="cursor:pointer;">Режим работы при блокировке</label>
         </div>
 
         <div id="timerDisplay" style="text-align:center; margin-top:15px; color: var(--text-dim); font-size: 11px;">До сигнала: —</div>
@@ -91,18 +86,16 @@
 </div>
 
 <script>
-    /* Данные фраз для разных этапов */
     const phrasesStart = ["Прогулка началась. Вдохновляйся моментом.", "Режим фотоохоты включен. Наблюдай за городом.", "Фотопрогулка активирована. Начинаем снимать.", "Город ждет твой лучший кадр. Погнали."];
     const phrasesShot = ["Внимание, снимай! У тебя минута.", "Лови момент! Время для кадра.", "Сделай этот кадр особенным. Пошел отсчет.", "Твой шанс! Делай максимально красивый снимок.", "Время пришло. В объективе — жизнь."];
     const phrasesWalk = ["Время вышло. Идем дальше.", "Кадр готов. Продолжаем прогулку.", "Снимок сделан? Отлично, ищем новый сюжет.", "Минута позади. Двигаемся к следующей точке.", "Заметь детали, которых никто не видит. Продолжаем прогулку.", "Меняй ракурс, ищи свет. Идем дальше.", "Не спеши, доверься интуиции. Продолжаем путь.", "Город — это твой холст. Идем дальше."];
 
-    /* Переменные состояния */
-    let audioCtx = null, backgroundNode = null, dummyAudio = null, state = 'idle', running = false, currentUtterance = null;
-    let isMinutes = true; // По умолчанию минуты
+    let audioCtx = null, backgroundNode = null, dummyAudio = null, state = 'idle', running = false;
+    let isMinutes = true; 
     const btn = document.getElementById('btn'), prog = document.getElementById('progress'), unitToggle = document.getElementById('unitToggle');
     const bgLockToggle = document.getElementById('bgLockToggle');
 
-    /* Создание фонового рабочего потока для точного отсчета времени */
+    // Фоновый воркер для отсчета времени
     const workerCode = `
         let timer = null;
         self.onmessage = function(e) {
@@ -119,7 +112,45 @@
     `;
     const worker = new Worker(URL.createObjectURL(new Blob([workerCode], { type: 'application/javascript' })));
 
-    /* Обработка событий от таймера */
+    // --- МОДУЛЬ ПЕРСИСТЕНТНОСТИ (Фонового режима) ---
+    function startPersistence() {
+        if (!bgLockToggle.checked || audioCtx) return; 
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        
+        // Генерация тишины
+        let osc = audioCtx.createOscillator();
+        let gain = audioCtx.createGain();
+        osc.frequency.value = 20; 
+        gain.gain.value = 0.0001; 
+        osc.connect(gain); gain.connect(audioCtx.destination); osc.start(); backgroundNode = osc;
+        
+        // Петля медиа-сессии
+        dummyAudio = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAAAD'); 
+        dummyAudio.loop = true; 
+        dummyAudio.play().catch(() => {});
+        
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.metadata = new MediaMetadata({ title: 'Фотопрогулка (активна)', artist: 'Олег Романов' });
+            navigator.mediaSession.playbackState = "playing";
+        }
+    }
+
+    function stopPersistence() {
+        if (backgroundNode) { try { backgroundNode.stop(); } catch(e){} backgroundNode = null; }
+        if (dummyAudio) { try { dummyAudio.pause(); dummyAudio.src = ""; dummyAudio = null; } catch(e){} }
+        if (audioCtx) { try { audioCtx.close(); audioCtx = null; } catch(e){} }
+        if ('mediaSession' in navigator) navigator.mediaSession.metadata = null;
+    }
+
+    // --- МОДУЛЬ РЕЧИ ---
+    function speak(text) {
+        speechSynthesis.cancel();
+        let u = new SpeechSynthesisUtterance(text);
+        u.lang = 'ru-RU';
+        speechSynthesis.speak(u);
+    }
+
+    // Обработчик таймера
     worker.onmessage = function(e) {
         if (!running) return;
         let timeLeft = e.data.timeLeft, phase = e.data.phase;
@@ -133,80 +164,33 @@
         }
     };
 
-    /* Функция инициализации аудио (удержание процесса в фоне) */
-    function startBackgroundAudio() {
-        if (!bgLockToggle.checked) return; // Если выключен режим "активного фона", не запускаем аудио-петлю
-        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        if (audioCtx.state === 'suspended') audioCtx.resume();
-        if (!backgroundNode) {
-            let osc = audioCtx.createOscillator();
-            let gain = audioCtx.createGain();
-            osc.frequency.value = 20; gain.gain.value = 0.002;
-            osc.connect(gain); gain.connect(audioCtx.destination); osc.start(); backgroundNode = osc;
-            if (!dummyAudio) { dummyAudio = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAAAD'); dummyAudio.loop = true; }
-            dummyAudio.play().catch(() => {});
-            if ('mediaSession' in navigator) {
-                navigator.mediaSession.metadata = new MediaMetadata({ title: 'Фотопрогулка', artist: 'Олег Романов' });
-                navigator.mediaSession.playbackState = "playing";
-            }
-        }
-    }
-
-    /* Остановка аудио */
-    function stopBackgroundAudio() {
-        if (backgroundNode) { try { backgroundNode.stop(); } catch(e){} backgroundNode = null; }
-        if (dummyAudio) { try { dummyAudio.pause(); dummyAudio.src = ""; dummyAudio = null; } catch(e){} }
-        if (audioCtx) { try { audioCtx.close(); audioCtx = null; } catch(e){} }
-    }
-
-    /* Голосовое оповещение */
-    function speak(text) {
-        startBackgroundAudio(); // Пытаемся активировать аудио перед речью
-        speechSynthesis.cancel();
-        currentUtterance = new SpeechSynthesisUtterance(text);
-        currentUtterance.lang = 'ru-RU';
-        
-        currentUtterance.onend = currentUtterance.onerror = () => {
-            // Если режим активного фона выключен, освобождаем аудио-поток сразу
-            if (!bgLockToggle.checked) setTimeout(stopBackgroundAudio, 500);
-            currentUtterance = null;
-        };
-        setTimeout(() => { speechSynthesis.speak(currentUtterance); }, 50);
-    }
-
-    /* Обновление UI слайдера */
     function updateUI() {
-        let min = document.getElementById('minR'), max = document.getElementById('maxR');
-        let fill = document.getElementById('trackFill');
+        let min = document.getElementById('minR'), max = document.getElementById('maxR'), fill = document.getElementById('trackFill');
         if (+min.value > +max.value) min.value = max.value;
-        
         document.getElementById('val').textContent = `${min.value} - ${max.value}`;
-        
-        // Расчет позиции закраски
         let minP = (min.value - min.min) / (min.max - min.min) * 100;
         let maxP = (max.value - max.min) / (max.max - max.min) * 100;
-        fill.style.left = minP + "%";
-        fill.style.width = (maxP - minP) + "%";
+        fill.style.left = minP + "%"; fill.style.width = (maxP - minP) + "%";
     }
 
-    /* Слушатели событий */
     document.getElementById('minR').oninput = document.getElementById('maxR').oninput = updateUI;
     unitToggle.onclick = () => { isMinutes = !isMinutes; unitToggle.textContent = isMinutes ? "Интервал (мин)" : "Интервал (сек)"; updateUI(); };
-    updateUI(); // Вызов при старте
+    updateUI();
 
-    /* Логика нажатия кнопки */
     btn.onclick = () => {
         if (state === 'idle') {
             state = 'walk'; running = true;
             btn.style.background = "#2e7d32";
             document.getElementById('btnText').textContent = "СТОП";
-            startBackgroundAudio(); 
+            
+            // Запуск персистентности, если выбрано
+            startPersistence();
+            
             speak(phrasesStart[Math.floor(Math.random() * phrasesStart.length)]);
             cycle();
         } else if (state === 'shot') { nextPhase(); }
     };
 
-    /* Удержание кнопки для выхода */
     let holdTimer;
     btn.onpointerdown = () => {
         if (state === 'idle') return;
@@ -214,12 +198,15 @@
         holdTimer = setInterval(() => {
             let elapsed = Date.now() - start;
             prog.style.width = Math.min(100, elapsed / 10) + "%";
-            if (elapsed > 1000) { worker.postMessage({ action: 'stop' }); stopBackgroundAudio(); location.reload(); }
+            if (elapsed > 1000) { 
+                worker.postMessage({ action: 'stop' }); 
+                stopPersistence(); // Останавливаем аудио принудительно
+                location.reload(); 
+            }
         }, 30);
     };
     btn.onpointerup = btn.onpointerleave = () => { clearInterval(holdTimer); prog.style.width = "0%"; };
 
-    /* Запуск фазы прогулки */
     function cycle() {
         if (!running) return;
         let minVal = +document.getElementById('minR').value, maxVal = +document.getElementById('maxR').value;
@@ -229,7 +216,6 @@
         worker.postMessage({ action: 'start', endTime: endTime, phase: 'walk' });
     }
 
-    /* Запуск фазы фото */
     function triggerShot() {
         state = 'shot';
         speak(phrasesShot[Math.floor(Math.random() * phrasesShot.length)]);
@@ -238,7 +224,6 @@
         worker.postMessage({ action: 'start', endTime: Date.now() + 60000, phase: 'shot' });
     }
 
-    /* Переход к следующей прогулке */
     function nextPhase() {
         state = 'walk';
         speak(phrasesWalk[Math.floor(Math.random() * phrasesWalk.length)]);
