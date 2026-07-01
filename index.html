@@ -44,7 +44,7 @@
 <body>
 
 <div class="app">
-    <h1>Фотопрогулка 1.7</h1>
+    <h1>Фотопрогулка 1.8</h1>
     <div class="instruction">
         Ходи по городу и делай фото. В случайный момент тебе поступит сигнал. У тебя будет ровно 1 минута, чтобы сделать кадр.
         <br><br>
@@ -145,13 +145,16 @@
         }
     }
 
-    /* Вспомогательный метод одиночного пика */
+/* Вспомогательный метод одиночного пика */
     function createBeepNode(freq, duration, startTimeOffset) {
         if (!audioCtx) return;
         let osc = audioCtx.createOscillator();
         let gain = audioCtx.createGain();
+        
+        // НАСТРОЙКА ГРОМКОСТИ И ХАРАКТЕРА ЗВУКА:
+        osc.type = 'square'; // 'square' делает звук резким и громким (как в ретро-играх), 'triangle' — чуть мягче, но громче синусоиды.
         osc.frequency.value = freq;
-        // Увеличенная громкость (gain) установлена на 1.0, чтобы перебивать музыку в фоне
+        
         gain.gain.setValueAtTime(1.0, audioCtx.currentTime + startTimeOffset);
         gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + startTimeOffset + duration);
         osc.connect(gain);
