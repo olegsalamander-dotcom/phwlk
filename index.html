@@ -17,7 +17,6 @@
         .hold-progress { position: absolute; left: 0; top: 0; height: 100%; background: rgba(0,0,0,0.2); width: 0%; pointer-events: none; }
         .panel { padding: 20px; border-radius: 16px; background: var(--panel); border: 1px solid var(--border); margin-top: 20px; }
         
-        /* Исправленная шкала */
         .slider-wrap { position: relative; height: 40px; margin-top: 15px; }
         .track { position: absolute; top: 18px; width: 100%; height: 2px; background: var(--border); }
         .ticks { display: flex; justify-content: space-between; font-size: 10px; color: var(--text-dim); padding: 0 5px; margin-bottom: 5px; }
@@ -32,7 +31,7 @@
 <body>
 
 <div class="app">
-    <h1>Фотопрогулка 1.5</h1>
+    <h1>Фотопрогулка 1.6</h1>
     <div class="instruction">
         Надевай наушники, включай музыку и иди гулять. В случайное время ты получишь сигнал и у тебя будет ровно одна минута, чтобы сделать кадр. Делай красивый кадр в том месте, где находишься. Когда фото будет готово нажми "кадр сделан" или просто продолжай прогулку когда таймер истечёт.
         <br><br>
@@ -71,7 +70,6 @@
     let audioCtx = null, backgroundNode = null, dummyAudio = null, holdTimer;
     let state = 'idle', running = false, isMinutes = false; 
 
-    // Воркер для точного отсчета
     const workerCode = `
         let timer = null;
         self.onmessage = function(e) {
@@ -90,14 +88,11 @@
     function startBackgroundAudio() {
         if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         if (audioCtx.state === 'suspended') audioCtx.resume();
-        
-        // Постоянный слабый тон + тихий аудио-файл для предотвращения засыпания вкладок
         if (!backgroundNode) {
             let osc = audioCtx.createOscillator();
             let gain = audioCtx.createGain();
             osc.frequency.value = 20; gain.gain.value = 0.001;
             osc.connect(gain); gain.connect(audioCtx.destination); osc.start(); backgroundNode = osc;
-            
             if (!dummyAudio) {
                 dummyAudio = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAAAD');
                 dummyAudio.loop = true;
@@ -114,7 +109,6 @@
 
     function speak(text) {
         startBackgroundAudio();
-        // Тройной писк
         for(let i=0; i<3; i++) {
             setTimeout(()=>{
                 let o = audioCtx.createOscillator();
@@ -166,12 +160,18 @@
         if (e.data.phase === 'walk' && e.data.timeLeft <= 0) {
             state = 'shot'; speak(phrasesShot[0]);
             document.getElementById('status').textContent = "ДЕЛАЙ КАДР!";
+            document.getElementById('btnText').textContent = "КАДР СДЕЛАН";
             worker.postMessage({ action: 'start', endTime: Date.now() + 60000, phase: 'shot' });
         } else if (e.data.phase === 'shot' && e.data.timeLeft <= 0) { nextPhase(); }
         else { document.getElementById('timerDisplay').textContent = `До сигнала: ${e.data.timeLeft}с`; }
     };
 
-    function nextPhase() { state = 'walk'; speak(phrasesWalk[0]); cycle(); }
+    function nextPhase() { 
+        state = 'walk'; 
+        document.getElementById('btnText').textContent = "СТОП";
+        speak(phrasesWalk[0]); 
+        cycle(); 
+    }
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('service-worker.js');
 </script>
 </body>
