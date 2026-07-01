@@ -28,9 +28,11 @@
 <body>
 
 <div class="app">
-    <h1>Фотопрогулка</h1>
+    <h1>Фотопрогулка 1.2</h1>
     <div class="instruction">
-        Надевай наушники, включай музыку и иди гулять. Удерживай кнопку «Стоп» (долгое нажатие) для выхода.
+        Надевай наушники, включай музыку и иди гулять. В случайное время ты получишь сигнал и у тебя будет ровно одна минута, чтобы сделать кадр. Делай красивый кадр в том месте, где находишься. Когда фото будет готово нажми "кадр сделан" или просто продолжай прогулку когда таймер истечёт.
+        <br><br>
+        Удерживай кнопку «Стоп» для выхода.
     </div>
     
     <div class="status" id="status">По готовности нажми СТАРТ</div>
@@ -193,7 +195,7 @@
 
     function nextPhase() {
         state = 'walk'; speak(phrasesWalk[Math.floor(Math.random() * phrasesWalk.length)]);
-        btn.style.background = "#2e7d32"; document.getElementById('btnText').textContent = "СТОП (держ)";
+        btn.style.background = "#2e7d32"; document.getElementById('btnText').textContent = "СТОП";
         cycle();
     }
 </script>
