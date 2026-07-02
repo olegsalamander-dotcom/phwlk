@@ -20,6 +20,7 @@
         .app { width: 100%; max-width: 400px; padding: 24px; }
         h1 { font-size: 20px; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 20px; text-align: center; color: var(--text); }
         .instruction { font-size: 13px; color: var(--text-dim); text-align: left; margin-bottom: 30px; line-height: 1.6; }
+        .instruction2 { font-size: 10px; color: var(--text-dim); text-align: center; margin-bottom: 30px; line-height: 1.6; }
         .status { padding: 16px; border: 1px solid var(--border); border-radius: 12px; text-align: center; margin-bottom: 20px; font-size: 14px; font-weight: 500; }
         
         /* Кнопка */
@@ -27,6 +28,12 @@
         button:active { opacity: 0.8; }
         .hold-progress { position: absolute; left: 0; top: 0; height: 100%; background: rgba(0,0,0,0.2); width: 0%; pointer-events: none; }
         
+        /* Стили для кнопок-пресетов режимов */
+        .modes-container { display: flex; gap: 8px; margin-bottom: 20px; transition: opacity 0.3s; }
+        .mode-btn { flex: 1; padding: 12px 6px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; color: var(--text-dim); font-size: 11px; font-weight: 600; cursor: pointer; text-align: center; transition: all 0.2s; user-select: none; }
+        .mode-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+        .mode-btn span { display: block; font-size: 9px; font-weight: 400; opacity: 0.7; margin-top: 2px; }
+
         /* Панель настроек */
         .panel { padding: 20px; border-radius: 16px; background: var(--panel); border: 1px solid var(--border); margin-top: 20px; }
         .slider-wrap { position: relative; height: 40px; margin-top: 10px; }
@@ -34,11 +41,26 @@
         /* Закраска диапазона */
         .track-fill { position: absolute; top: 18px; height: 2px; background: var(--accent); pointer-events: none; }
         .ticks { display: flex; justify-content: space-between; font-size: 9px; color: var(--text-dim); padding: 0 4px; }
-        input[type=range] { position: absolute; width: 100%; pointer-events: none; -webkit-appearance: none; background: none; }
-        input[type=range]::-webkit-slider-thumb { pointer-events: all; width: 16px; height: 16px; border-radius: 50%; background: var(--text); cursor: pointer; }
+        input[type=range] { position: absolute; width: calc(100% + 16px); left: -8px; pointer-events: none; -webkit-appearance: none; background: none; margin: 0; }
+        input[type=range]::-webkit-slider-thumb { pointer-events: all; width: 16px; height: 16px; border-radius: 50%; background: var(--text); cursor: pointer; -webkit-appearance: none; }
+        input[type=range]::-moz-range-thumb { pointer-events: all; width: 16px; height: 16px; border-radius: 50%; background: var(--text); cursor: pointer; border: none; }
         
         .footer { margin-top: 30px; text-align: center; font-size: 12px; color: var(--text-dim); }
         .footer a { color: var(--accent); text-decoration: none; margin: 0 8px; }
+        .links { margin-top: 6px; text-align: left; font-size: 12px; color: var(--text-dim); line-height: 1.6; }
+        .links a { color: var(--accent); text-decoration: none; }
+        
+        /* Выделение хэштегов */
+        a[href^="#"]:not([href="#"]) { color: var(--accent); text-decoration: none; font-weight: 600; }
+
+        /* Стили для раскрывающейся инструкции-руководства */
+        .instruction-details { border: 1px solid var(--border); border-radius: 12px; background: var(--panel); margin-top: -15px; margin-bottom: 25px; padding: 14px; transition: all 0.3s; }
+        .instruction-summary { font-size: 13px; font-weight: 600; color: var(--text); cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center; user-select: none; }
+        .instruction-summary::after { content: '▾'; color: var(--text-dim); transition: transform 0.2s; font-size: 16px; }
+        .instruction-details[open] .instruction-summary::after { transform: rotate(180deg); }
+        .instruction-full-text { font-size: 13px; color: var(--text-dim); line-height: 1.6; margin-top: 12px; border-top: 1px solid var(--border); padding-top: 12px; }
+        .instruction-full-text ul { margin: 8px 0; padding-left: 20px; }
+        .instruction-full-text li { margin-bottom: 8px; }
         [hidden] { display: none !important; }
     </style>
 </head>
@@ -47,13 +69,17 @@
 <div class="app">
     <h1>Фотопрогулка</h1>
     <div class="instruction">
-        Надевай наушники, включай музыку, нажми "старт" и отправляйся на прогулку. В случайный момент ты услышишь обратный отчёт из 5 коротких гудков. У тебя будет ровно 1 минута, чтобы сделать кадр.<br><br>
+        Гуляй по городу и делай кадр каждый раз когда прозвучит сигнал. У тебя будет ровно 1 минута.<br><br>
         - Не пытайся угадать когда будет сигнал и не кружись на одном месте в ожидании.<br>
-        - Сними самый лучший кадр, который можно сделать в том месте где ты находишься.<br><br>
-        Хорошей фототренировки!<br><br><br>
-        Для остановки удерживай кнопку «Стоп».
+        - Сними самый лучший кадр, который можно сделать в том месте где ты находишься.
     </div>
     
+    <div class="modes-container" id="modesBlock">
+        <div class="mode-btn active" id="modeWalk" onclick="setPreset(3, 7, 'modeWalk')">Спокойная прогулка<span>Интервал 3-7 мин</span></div>
+        <div class="mode-btn" id="modeBike" onclick="setPreset(7, 15, 'modeBike')">Размеренная прогулка<span>Интервал 7-15 мин</span></div>
+        <div class="mode-btn" id="modeExtreme" onclick="setPreset(1, 3, 'modeExtreme')">Экстрим тренировка<span>Интервал 1-3 мин</span></div>
+    </div>
+
     <div class="status" id="status">По готовности нажми СТАРТ</div>
     
     <button id="btn">
@@ -61,31 +87,95 @@
         <span id="btnText">СТАРТ</span>
     </button>
 
+    <div class="instruction2">
+        Для остановки удерживай кнопку "СТОП"
+    </div>
+
     <div class="panel" hidden>
         <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:15px; color: var(--text-dim);">
             <span id="unitToggle" style="cursor:pointer; border-bottom: 1px dotted var(--text-dim); user-select: none;">Интервал (мин)</span>
-            <span id="val" style="font-weight:bold; color: var(--text);">3 - 10</span>
+            <span id="val" style="font-weight:bold; color: var(--text);">3 - 7</span>
         </div>
         <div class="slider-wrap">
             <div class="track"></div>
-            <div class="track-fill" id="trackFill"></div> <div class="ticks"><span>1</span><span>5</span><span>10</span><span>15</span></div>
-            <input id="minR" type="range" min="1" max="15" value="2">
-            <input id="maxR" type="range" min="1" max="15" value="6">
+            <div class="track-fill" id="trackFill"></div> 
+            <div class="ticks"><span>1</span><span>5</span><span>10</span><span>15</span></div>
+            <input id="minR" type="range" min="1" max="15" value="3">
+            <input id="maxR" type="range" min="1" max="15" value="7">
         </div>
         
         <div id="timerDisplay" style="text-align:center; margin-top:15px; color: var(--text-dim); font-size: 11px;">До сигнала: —</div>
     </div>
 
+    <details class="instruction-details">
+        <summary class="instruction-summary">Подробнее</summary>
+        <div class="instruction-full-text">
+            <strong>О чём это</strong>
+            <p>
+                Приложение создано для тренировки твоих фотонавыков. Ты выходишь в город, надеваешь наушники, включаешь любимую музыку / книгу / подкаст и идёшь гулять. Время от времени ты получаешь звуковой сигнал, который означает - пора делать кадр! У тебя есть ровно одна минута, чтобы найти и сделать красивый кадр в том месте где ты на данный момент находишься.<br><br>
+                Ты заранее не знаешь когда именно будет сигнал. Он прозвучит в любое время. Но ты можешь выбрать удобный для тебя диапазон. На выбор есть три режима прогулки:
+            </p>
+            <ul>
+                <li><strong>Спокойная прогулка.</strong><br>Интервал 3-7 минут. Подойдёт для большинства пеших прогулок.</li>
+                <li><strong>Размеренная прогулка.</strong><br>Интервал 7-15 минут. Подойдёт для велопрогулок по городу, чтобы часто не останавливаться.</li>
+                <li><strong>Экстрим тренировка.</strong><br>Интервал 1-3 минуты. Подойдёт если вы в очень насыщенном месте и готовы делать кадры достаточно часто.</li>
+            </ul>
+            <p>
+                Выбирай удобный для себя режим. Нажимай "СТАРТ" и начинай прогулку. Полученными кадрами делись в соцсетях с хэштегом <a href="#фотоохотазаминуту">#фотоохотазаминуту</a>. Чтобы приложение не засыпало, его нужно "установить" из браузера: Три точки -> установить на главный экран (или что-то подобное). По возможности не держите открытыми много приложений.<br><br>
+                <strong>Об авторе</strong><br>
+                Меня зовут Олег Романов. Я фотограф из Ижевска. Однажды решил устроить себе такой фоточеллендж. И подумал, что было бы удобно иметь рандомный таймер, который нельзя предугадать. И вот мы здесь.<br><br>
+                Вы можете подписаться на меня в моих соцсетях:
+            </p>
+            <div class="links">
+                <a href="https://t.me/olegolezhek/" target="_blank" rel="noopener">t.me/olegolezhek</a><br>
+                <a href="https://vk.com/ioromanov/" target="_blank" rel="noopener">vk.com/ioromanov</a>
+            </div>
+        </div>
+    </details>
+
+    <button id="clearCacheBtn" style="margin-top: 15px; padding: 10px; font-size: 12px; background: #27272a; color: var(--text-dim); border: 1px solid var(--border);">
+                Проверить обновления
+    </button>
+
     <div class="footer">
         <div>Автор проекта: Олег Романов</div>
-        <div style="margin-top: 8px;">
-         <a href="https://t.me/olegolezhek/">t.me/olegolezhek</a><br>
-         v 1.1 (02.07.2026) 
-        </div>
+        <div style="margin-top: 8px;">v 1.2</div>
     </div>
 </div>
 
 <script>
+/* Принудительный сброс кэша приложения */
+    document.getElementById('clearCacheBtn').onclick = function() {
+        if (confirm('Приложение сбросит кэш и перезагрузится для загрузки последней версии. Продолжить?')) {
+            if ('caches' in window) {
+                // Находим и удаляем все кэш-хранилища, связанные с этим сайтом
+                caches.keys().then(function(names) {
+                    for (let name of names) caches.delete(name);
+                }).then(function() {
+                    // Принудительно очищаем sessionStorage и перезагружаем страницу
+                    sessionStorage.clear();
+                    location.reload(true);
+                });
+            } else {
+                location.reload(true);
+            }
+        }
+    };
+    
+    /* Функция переключения пресетов (режимов прогулки) */
+    function setPreset(min, max, activeId) {
+        if (state !== 'idle') return; // Блокируем переключение, если прогулка активна
+        
+        document.getElementById('minR').value = min;
+        document.getElementById('maxR').value = max;
+        
+        updateUI(); // Принудительно обновляем внутреннее состояние интервалов
+        
+        // Меняем активный класс на кнопках
+        document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
+        document.getElementById(activeId).classList.add('active');
+    }
+
     /* Данные фраз */
     const phrasesStart = ["Прогулка началась. Вдохновляйся моментом.", "Режим фотоохоты включен. Наблюдай за городом.", "Фотопрогулка активирована. Начинаем снимать.", "Город ждет твой лучший кадр. Погнали."];
     const phrasesShot = ["Внимание, снимай! У тебя минута.", "Лови момент! Время для кадра.", "Сделай этот кадр особенным. Пошел отсчет.", "Твой шанс! Делай максимально красивый снимок.", "Время пришло. В объективе — жизнь."];
@@ -106,8 +196,6 @@
                 let endTime = e.data.endTime;
                 
                 // Высокая частота проверки (200мс) гарантирует точность. 
-                // Даже если телефон "усыпит" поток на пару минут, при малейшем микро-просыпании 
-                // код мгновенно вычислит правильное время по Date.now() и пришлет сигнал.
                 timer = setInterval(() => {
                     let now = Date.now();
                     let timeLeft = Math.max(0, Math.round((endTime - now) / 1000));
@@ -119,12 +207,11 @@
     `;
     const worker = new Worker(URL.createObjectURL(new Blob([workerCode], { type: 'application/javascript' })));
 
-  /* Инициализация аудио-замка (фоновый режим) с защитой от засыпания */
+    /* Инициализация аудио-замка (фоновый режим) с защитой от засыпания */
     function startBackgroundAudio() {
         if (audioCtx) return;
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         
-        // Автоматический "будильник": если система усыпляет аудио в фоне, принудительно будим его
         audioCtx.onstatechange = function() {
             if (audioCtx && audioCtx.state === 'suspended') {
                 audioCtx.resume();
@@ -135,10 +222,8 @@
         let osc = audioCtx.createOscillator();
         let gain = audioCtx.createGain();
         
-        // Модулируем частоту (каждые 100мс микроизменения), чтобы ОС считала поток живым треком
         osc.frequency.setValueAtTime(22, audioCtx.currentTime);
         
-        // Создаем бесконечный паттерн микро-колебаний частоты (от 20 до 24 Гц)
         let fMod = 0;
         setInterval(() => {
             if (audioCtx && osc) {
@@ -169,14 +254,13 @@
         }
     }
 
-/* Вспомогательный метод одиночного пика */
+    /* Вспомогательный метод одиночного пика */
     function createBeepNode(freq, duration, startTimeOffset) {
         if (!audioCtx) return;
         let osc = audioCtx.createOscillator();
         let gain = audioCtx.createGain();
         
-        // НАСТРОЙКА ГРОМКОСТИ И ХАРАКТЕРА ЗВУКА:
-        osc.type = 'square'; // 'square' делает звук резким и громким (как в ретро-играх), 'triangle' — чуть мягче, но громче синусоиды.
+        osc.type = 'square'; 
         osc.frequency.value = freq;
         
         gain.gain.setValueAtTime(2.0, audioCtx.currentTime + startTimeOffset);
@@ -192,21 +276,17 @@
         if (!audioCtx) return;
         
         if (type === 'start') {
-            // Триоль: три быстрых пика с повышением тональности
             createBeepNode(600, 0.1, 0.0);
             createBeepNode(750, 0.1, 0.12);
             createBeepNode(900, 0.15, 0.24);
         } 
         else if (type === 'countdown') {
-            // Короткий предупреждающий пик обратного отсчета
             createBeepNode(880, 0.08, 0.0);
         }
         else if (type === 'shot') {
-            // Финальный длинный сигнал начала съемки
             createBeepNode(1200, 0.6, 0.0);
         } 
         else if (type === 'walk') {
-            // Идти дальше: два спокойных низких сигнала
             createBeepNode(440, 0.2, 0.0);
             createBeepNode(440, 0.2, 0.35);
         }
@@ -227,7 +307,6 @@
             let displayTime = isMinutes && timeLeft >= 60 ? `${Math.floor(timeLeft / 60)}м ${timeLeft % 60}с` : `${timeLeft}с`;
             document.getElementById('timerDisplay').textContent = `До сигнала: ${displayTime}`;
             
-            // Запуск обратного отсчета за 5 секунд до начала съемки
             if (timeLeft <= 4 && timeLeft > 0) {
                 if (lastBeepTime !== timeLeft) {
                     lastBeepTime = timeLeft;
@@ -261,10 +340,13 @@
     /* Кнопка старта */
     btn.onclick = () => {
         if (state === 'idle') {
+            document.getElementById('modesBlock').style.opacity = "0.4";
+            document.getElementById('modesBlock').style.pointerEvents = "none";
+            
             state = 'walk'; running = true;
             btn.style.background = "#2e7d32";
             document.getElementById('btnText').textContent = "СТОП";
-            startBackgroundAudio(); // Всегда запускаем аудио-замок
+            startBackgroundAudio(); 
             playSignal('start');
             cycle();
         } else if (state === 'shot') { nextPhase(); }
@@ -290,7 +372,7 @@
         let randomUnits = Math.floor(Math.random() * (maxVal - minVal + 1) + minVal);
         let endTime = Date.now() + randomUnits * (isMinutes ? 60 : 1) * 1000;
         document.getElementById('status').textContent = "Идёт прогулка";
-        lastBeepTime = 0; // Сбрасываем счетчик пиков для нового интервала
+        lastBeepTime = 0; 
         worker.postMessage({ action: 'start', endTime: endTime, phase: 'walk' });
     }
 
