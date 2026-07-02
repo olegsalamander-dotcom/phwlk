@@ -1,5 +1,4 @@
-// Изменили версию на v1.6. Теперь телефон поймет, что файлы обновились!
-const CACHE_NAME = 'fotoprogulka-02.07.2026-v1.6'; 
+const CACHE_NAME = 'fotoprogulka-03.07.2026-v02'; 
 const ASSETS = [
   './',
   './index.html',
