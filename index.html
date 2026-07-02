@@ -80,7 +80,7 @@
         <div>Автор проекта: Олег Романов</div>
         <div style="margin-top: 8px;">
          <a href="https://t.me/olegolezhek/">t.me/olegolezhek</a><br>
-         v 1.1 (02.07.2026) 
+         v 1.2 (02.07.2026) 
         </div>
     </div>
 </div>
@@ -97,7 +97,7 @@
     let lastBeepTime = 0; // Для отслеживания посекундного пикания в обратном отсчете
     const btn = document.getElementById('btn'), prog = document.getElementById('progress'), unitToggle = document.getElementById('unitToggle');
 
-    /* Воркер таймера */
+    /* Оптимизированный воркер таймера, устойчивый к блокировке */
     const workerCode = `
         let timer = null;
         self.onmessage = function(e) {
@@ -105,7 +105,9 @@
                 clearInterval(timer);
                 let endTime = e.data.endTime;
                 
-                // Высокая частота проверки гарантирует точность, даже если поток засыпал при блокировке
+                // Высокая частота проверки (200мс) гарантирует точность. 
+                // Даже если телефон "усыпит" поток на пару минут, при малейшем микро-просыпании 
+                // код мгновенно вычислит правильное время по Date.now() и пришлет сигнал.
                 timer = setInterval(() => {
                     let now = Date.now();
                     let timeLeft = Math.max(0, Math.round((endTime - now) / 1000));
