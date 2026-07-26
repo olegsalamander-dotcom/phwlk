@@ -28,12 +28,12 @@ body {
 .app { width: 100%; max-width: 400px; padding: 24px; margin: auto 0; box-sizing: border-box; }
 
 h1 { 
-    font-family: var(--font-serif);
-    font-size: 25px; 
-    font-weight: 700;
-    text-transform: uppercase; 
-    letter-spacing: 3px; 
-    margin-top: 0;
+    font-family: "Ubuntu", "Comfortaa", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 32px; 
+    font-weight: 800; /* Очень жирный шрифт, как в брендбуке */
+    text-transform: none; /* Убираем жесткий UPPERCASE, делаем живым и мягким */
+    letter-spacing: -0.5px; /* Сближаем буквы для плотности, характерной для современных логотипов */
+    margin-top: 10px;
     margin-bottom: 24px; 
     text-align: center; 
     color: var(--text); 
