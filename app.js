@@ -96,7 +96,7 @@ function startBackgroundAudio() {
     dummyAudio.play().catch(() => {});
     
     if ('mediaSession' in navigator) {
-        navigator.mediaSession.metadata = new MediaMetadata({ title: 'Фотопрогулка (активна)', artist: 'Олег Романов' });
+        navigator.mediaSession.metadata = new MediaMetadata({ title: 'ГУЛЯЙ - СНИМАЙ (активно)', artist: 'Олег Романов' });
         navigator.mediaSession.playbackState = "playing";
         navigator.mediaSession.setActionHandler('play', () => { if(dummyAudio) dummyAudio.play(); if(audioCtx) audioCtx.resume(); });
         navigator.mediaSession.setActionHandler('pause', () => { if(dummyAudio) dummyAudio.play(); });
