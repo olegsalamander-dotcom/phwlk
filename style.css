@@ -28,15 +28,26 @@ body {
 .app { width: 100%; max-width: 400px; padding: 24px; margin: auto 0; box-sizing: border-box; }
 
 h1 { 
-    font-family: "Ubuntu", "Comfortaa", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    font-size: 32px; 
-    font-weight: 800; /* Очень жирный шрифт, как в брендбуке */
-    text-transform: none; /* Убираем жесткий UPPERCASE, делаем живым и мягким */
-    letter-spacing: -0.5px; /* Сближаем буквы для плотности, характерной для современных логотипов */
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 34px; 
+    font-weight: 850; /* Максимально жирный, плакатный вес букв */
+    text-transform: none; 
+    letter-spacing: -1.2px; /* Сильное сближение букв для создания эффекта единого логотипа */
     margin-top: 10px;
     margin-bottom: 24px; 
     text-align: center; 
     color: var(--text); 
+    
+    /* Магия для iOS/Mac: переключает стандартный шрифт San Francisco в округлый режим */
+    font-variant-numeric: lining-nums;
+    font-feature-settings: "ss01", "ss02";
+}
+
+/* Специальный хак для Apple-устройств, активирующий скругленный системный шрифт */
+@supports (font-variant-caps: tabular-nums) {
+    h1 {
+        font-family: .SFNS-Rounded, .AppleSystemUIFontRounded, system-ui, sans-serif;
+    }
 }
 
 .instruction { font-size: 13px; color: var(--text-dim); text-align: left; margin-bottom: 30px; line-height: 1.6; }
